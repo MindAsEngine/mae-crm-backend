@@ -1,0 +1,126 @@
+version: '3.9'
+
+services:
+  # # Audience Service
+  # audience-service:
+  #   build:
+  #     context: ./audience-service
+  #     dockerfile: Dockerfile
+  #   container_name: audience-service
+  #   ports:
+  #     - "8081:8081"
+  #   environment:
+  #     - DATABASE_URL=postgresql://postgres:password@db:5432/audience_db
+  #     - REDIS_URL=redis://redis:6379
+  #   depends_on:
+  #     - db
+  #     - redis
+  #     - rabbitmq
+
+  # Ads Integration Service
+  ads-integration-service:
+    restart: unless-stopped
+    build:
+      context: ./ads-integration-service
+      dockerfile: Dockerfile
+    container_name: ads-integration-service
+    ports:
+      - "8081:8081"
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/ads_integration_db
+      - QUEUE_URL=amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      - db
+      - redis
+      - rabbitmq
+      
+
+  # CRM Integration Service
+  crm-integration-service:
+    build:
+      context: ./crm-integration-service
+      dockerfile: Dockerfile
+    container_name: crm-integration-service
+    ports:
+      - "8083:8083"
+    environment:
+      - CRM_API_URL=https://crm.example.com/api
+      - LOGGING_URL=http://logging-service:8084/logs
+    depends_on:
+      - logging-service
+
+  # Reporting Service
+  reporting-service:
+    restart: unless-stopped
+    build:
+      context: ./reporting-service
+      dockerfile: Dockerfile
+    container_name: reporting-service
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/reporting_db
+    depends_on:
+      - db
+      - redis
+      - rabbitmq
+
+  # Logging Service
+  logging-service:
+    build:
+      context: ./logging-service
+      dockerfile: Dockerfile
+    container_name: logging-service
+    ports:
+      - "8084:8084"
+    environment:
+      - ELASTICSEARCH_URL=http://elasticsearch:8088
+    depends_on:
+      - elasticsearch
+
+  # PostgreSQL
+  db:
+    image: postgres:15
+    container_name: db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Redis
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+  # RabbitMQ
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+  # Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    ports:
+      - "8088:9200"
+      - "8089:9300"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+
+volumes:
+  postgres_data:
+  es_data:

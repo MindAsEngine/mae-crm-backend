@@ -1,0 +1,1240 @@
+openapi: 3.0.3
+info:
+  title: Macro
+  description: Все табличные страницу имеют схожую структуру Schemas - table
+  version: 1.0.0
+servers:
+  - url: 'http://127.0.0.1:4010'
+paths:
+  /api/audiences:
+    get:
+      summary: Получение аудиторий
+      description: Возвращает все аудитории
+      responses:
+        200:
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Audience'
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AudienceCreateRequest'
+      responses:
+        201:
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Audience'
+  /api/audiences/{audienceId}:
+    delete:
+      description: Удалить аудитория
+      parameters:
+        - name: audienceId
+          in: path
+          schema:
+            type: integer
+          example: 1
+          required: true
+      responses:
+        201:
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                type: object
+  /api/audiences/{audienceId}/disconnect:
+    delete:
+      description: Удалить все подключения
+      parameters:
+        - name: audienceId
+          in: path
+          schema:
+            type: integer
+          example: 1
+          required: true
+      responses:
+        201:
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                type: object
+  /api/integrations:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntegrationRequest'
+      responses:
+        201:
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                type: object
+  /api/call-center:
+    get:
+      summary: Получение данных колл-центра
+      description: Возвращает данные с возможностью фильтрации, сортировки и поиска.
+      parameters:
+        - name: search
+          in: query
+          description: Поиск по ФИО. Если пустой, поиск не применяется.
+          required: false
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          description: Начальная дата в формате ISO 8601 (YYYY-MM-DDTHH:mm:ss.sssZ).
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          description: Конечная дата в формате ISO 8601 (YYYY-MM-DDTHH:mm:ss.sssZ).
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: sort
+          in: query
+          description: Поле для сортировки (`fio_asc`, `count1_desc`, и т.д.).
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+              examples:
+                example-1:
+                  value:
+                    headers:
+                      - is_sortable: true
+                        is_aside_header: false
+                        name: id
+                        is_id: true
+                        title: "№"
+                        is_visible: false
+                        is_additional: false
+                        format: "number"
+                      - is_sortable: true
+                        is_aside_header: true
+                        name: fio
+                        is_id: false
+                        title: "ФИО"
+                        is_visible: true
+                        is_additional: false
+                        format: "string"
+                      - is_sortable: true
+                        is_aside_header: false
+                        name: count1
+                        is_id: false
+                        title: "Общее количество обращений"
+                        is_visible: true
+                        is_additional: false
+                        format: "number"
+                      - is_sortable: true
+                        is_aside_header: false
+                        name: count2
+                        is_id: false
+                        title: "Общее количество целевых обращений"
+                        is_visible: true
+                        is_additional: false
+                        format: "number"
+                      - is_sortable: true
+                        is_aside_header: false
+                        name: CR1
+                        is_id: false
+                        title: "Конверсия в целевое обращение"
+                        is_visible: true
+                        is_additional: false
+                        format: "percent"
+                      - is_sortable: true
+                        is_aside_header: false
+                        name: count3
+                        is_id: false
+                        title: "Количество назначенных визитов"
+                        is_visible: true
+                        is_additional: false
+                        format: "number"
+                      - is_sortable: true
+                        is_aside_header: false
+                        name: CR2
+                        is_id: false
+                        title: "Конверсия из целевых в назначенный визит"
+                        is_visible: true
+                        is_additional: false
+                        format: "percent"
+                      - is_sortable: true
+                        is_aside_header: false
+                        name: count4
+                        is_id: false
+                        title: "Количество состоявшихся визитов"
+                        is_visible: true
+                        is_additional: false
+                        format: "number"
+                      - is_sortable: true
+                        is_aside_header: false
+                        name: CR3
+                        is_id: false
+                        title: "Конверсия из назначенных визитов в состоявшийся"
+                        is_visible: true
+                        is_additional: false
+                        format: "percent"
+                      - is_sortable: true
+                        is_aside_header: false
+                        name: CR4
+                        is_id: false
+                        title: "Конверсия из целевого лида в состоявшийся визит"
+                        is_visible: true
+                        is_additional: false
+                        format: "percent"
+                      - is_sortable: true
+                        is_aside_header: false
+                        name: count5
+                        is_id: false
+                        title: "Кол-во платных бронирований"
+                        is_visible: false
+                        is_additional: true
+                        format: "number"
+                      - is_sortable: true
+                        is_aside_header: false
+                        name: CR5
+                        is_id: false
+                        title: "Конв. из состоявшегося визита в платное бронирование"
+                        is_visible: false
+                        is_additional: true
+                        format: "percent"
+                      - is_sortable: true
+                        is_aside_header: false
+                        name: count6
+                        is_id: false
+                        title: "Кол-во заключенных договоров ДДУ"
+                        is_visible: false
+                        is_additional: true
+                        format: "number"
+                      - is_sortable: true
+                        is_aside_header: false
+                        name: CR6
+                        is_id: false
+                        title: "Конверсия из платного бронирования в ДДУ"
+                        is_visible: false
+                        is_additional: true
+                        format: "percent"
+                      - is_sortable: true
+                        is_aside_header: false
+                        name: CR7
+                        is_id: false
+                        title: "Конверсия из целевого обращения в ДДУ"
+                        is_visible: false
+                        is_additional: true
+                        format: "percent"
+                    data:
+                      - is_anomaly: true
+                        id: 1
+                        fio: "Иванов Иван Иванович"
+                        count1: 10
+                        count2: 5
+                        CR1: 0.5
+                        count3: 3
+                        CR2: 0.6
+                        count4: 2
+                        CR3: 0.7
+                        CR4: 0.8
+                        count5: 1
+                        CR5: 0.9
+                        count6: 1
+                        CR6: 1
+                        CR7: 1
+                      - is_anomaly: false
+                        id: 2
+                        fio: "Петров Петр Петрович"
+                        count1: 20
+                        count2: 10
+                        CR1: 0.5
+                        count3: 6
+                        CR2: 0.6
+                        count4: 4
+                        CR3: 0.7
+                        CR4: 0.8
+                        count5: 2
+                        CR5: 0.9
+                        count6: 2
+                        CR6: 1
+                        CR7: 1
+                      - is_anomaly: false
+                        id: 3
+                        fio: "Сидоров Сидор Сидорович"
+                        count1: 30
+                        count2: 15
+                        CR1: 0.5
+                        count3: 9
+                        CR2: 0.6
+                        count4: 6
+                        CR3: 0.7
+                        CR4: 0.8
+                        count5: 3
+                        CR5: 0.9
+                        count6: 3
+                        CR6: 1
+                        CR7: 1
+                      # Пример продолжается для всех данных
+                    footer:
+                      id: null
+                      fio: "Среднее значение"
+                      count1: 160
+                      count2: 80
+                      CR1: 0.5
+                      count3: 48
+                      CR2: 0.6
+                      count4: 32
+                      CR3: 0.7
+                      CR4: 0.8
+                      count5: 16
+                      CR5: 0.9
+                      count6: 16
+                      CR6: 1
+                      CR7: 1
+  /api/call-center/export:
+    get:
+      summary: Экспорт данных в формате Excel
+      description: Экспортирует отфильтрованные данные о колл-центре в формате Excel.
+      parameters:
+        - name: search
+          in: query
+          description: Поиск по ФИО. Если пустой, поиск не применяется.
+          required: false
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          description: Начальная дата
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          description: Конечная дата в формате ISO 8601 (YYYY-MM-DDTHH:mm:ss.sssZ).
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: sort
+          in: query
+          description: Поле для сортировки (`fio_asc`, `count1_desc`, и т.д.).
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Успешный экспорт файла.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+                example: "Экспортируемый Excel-файл"
+  /api/regions:
+    get:
+      summary: "Получить информацию по регионам"
+      description: "Этот эндпоинт возвращает информацию о проектах с разбивкой по регионам."
+      parameters:
+        - name: search
+          in: query
+          description: Поиск названию проекта.
+          required: false
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          description: Начальная дата в формате ISO 8601 (YYYY-MM-DDTHH:mm:ss.sssZ).
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          description: Конечная дата в формате ISO 8601 (YYYY-MM-DDTHH:mm:ss.sssZ).
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: sort
+          in: query
+          description: Поле для сортировки (`fio_asc`, `count1_desc`, и т.д.).
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: "Успешный ответ с данными по регионам"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  headers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Header'
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name_of_projects:
+                          type: string
+                        region1:
+                          type: integer
+                        region2:
+                          type: integer
+                        region3:
+                          type: integer
+                        region4:
+                          type: integer
+                        region5:
+                          type: integer
+                        region6:
+                          type: integer
+                        region7:
+                          type: integer
+                        region8:
+                          type: integer
+                  footer:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name_of_projects:
+                        type: string
+                      region1:
+                        type: integer
+                      region2:
+                        type: integer
+                      region3:
+                        type: integer
+                      region4:
+                        type: integer
+                      region5:
+                        type: integer
+                      region6:
+                        type: integer
+                      region7:
+                        type: integer
+                      region8:
+                        type: integer
+
+              examples:
+                example-1:
+                  value:
+                    headers:
+                      - name: "id"
+                        is_id: true
+                        title: "№"
+                        is_visible: false
+                        is_additional: false
+                        format: "number"
+                      - name: "name_of_projects"
+                        title: "Наименование проектов"
+                        is_visible: true
+                        is_additional: false
+                        format: "string"
+                      - name: "region1"
+                        title: "Регион 1"
+                        is_visible: true
+                        is_additional: true
+                        format: "number"
+                      - name: "region2"
+                        title: "Регион 2"
+                        is_visible: true
+                        is_additional: true
+                        format: "number"
+                      - name: "region3"
+                        title: "Регион 3"
+                        is_visible: true
+                        is_additional: true
+                        format: "number"
+                      - name: "region4"
+                        title: "Регион 4"
+                        is_visible: true
+                        is_additional: true
+                        format: "number"
+                      - name: "region5"
+                        title: "Регион 5"
+                        is_visible: true
+                        is_additional: true
+                        format: "number"
+                      - name: "region6"
+                        title: "Регион 6"
+                        is_visible: true
+                        is_additional: true
+                        format: "number"
+                      - name: "region7"
+                        title: "Регион 7"
+                        is_visible: true
+                        is_additional: true
+                        format: "number"
+                      - name: "region8"
+                        title: "Регион 8"
+                        is_visible: true
+                        is_additional: true
+                        format: "number"
+                    data:
+                      - id: 1
+                        name_of_projects: "Проект 1ssrf"
+                        region1: 37
+                        region2: 33
+                        region3: 1
+                        region4: 3
+                        region5: 0
+                        region6: 21
+                        region7: 0
+                        region8: 21
+                      - id: 21
+                        name_of_projects: "Проект 1ssrf"
+                        region1: 37
+                        region2: 33
+                        region3: 1
+                        region4: 3
+                        region5: 0
+                        region6: 21
+                        region7: 0
+                        region8: 21
+                      - id: 13
+                        name_of_projects: "Проект 1ssfgt"
+                        region1: 37
+                        region2: 33
+                        region3: 1
+                        region4: 3
+                        region5: 0
+                        region6: 21
+                        region7: 0
+                        region8: 21
+                    footer:
+                      id: 0
+                      name_of_projects: "Общее"
+                      region1: 37
+                      region2: 33
+                      region3: 1
+                      region4: 3
+                      region5: 0
+                      region6: 21
+                      region7: 0
+                      region8: 21
+  /api/regions/export:
+    get:
+      summary: Экспорт данных в формате Excel
+      description: Экспортирует отфильтрованные данные о статусах в формате Excel.
+      parameters:
+        - name: search
+          in: query
+          description: Поиск по ФИО. Если пустой, поиск не применяется.
+          required: false
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          description: Начальная дата в формате ISO 8601 (YYYY-MM-DDTHH:mm:ss.sssZ).
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          description: Конечная дата в формате ISO 8601 (YYYY-MM-DDTHH:mm:ss.sssZ).
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: sort
+          in: query
+          description: Поле для сортировки (`fio_asc`, `count1_desc`, и т.д.).
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Успешный экспорт файла.
+          content:
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+                example: |
+                  <Base64-закодированные данные файла Excel>
+  /api/process-speed:
+    get:
+      summary: Данные о статусах и средней скорости обработки заявок
+      description: Возвращает данные о статусах заявок, включая их количество и среднее время обработки.
+      parameters:
+        - name: search
+          in: query
+          description: Поиск по ФИО. Если пустой, поиск не применяется.
+          required: false
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          description: Начальная дата в формате ISO 8601 (YYYY-MM-DDTHH:mm:ss.sssZ).
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          description: Конечная дата в формате ISO 8601 (YYYY-MM-DDTHH:mm:ss.sssZ).
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: sort
+          in: query
+          description: Поле для сортировки (`fio_asc`, `count1_desc`, и т.д.).
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Успешный ответ с данными.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  headers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Header'
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: number
+                          example: 1
+                        status_name:
+                          type: string
+                          example: "Количество заявок"
+                        no_purpose:
+                          type: integer
+                          example: 3000
+                        rejected:
+                          type: integer
+                          example: 2000
+                        deferred:
+                          type: integer
+                          example: 10000
+                        booked:
+                          type: integer
+                          example: 13422
+                        default:
+                          type: integer
+                          example: 1322
+                        check:
+                          type: integer
+                          example: 1452
+                        selection:
+                          type: integer
+                          example: 1246
+                  footer:
+                    type: object
+                    properties:
+                      id:
+                        type: number
+                        example: 0
+                      status_name:
+                        type: string
+                        example: "Среднее время"
+                      no_purpose:
+                        type: string
+                        example: "1 день 3 часа"
+                      rejected:
+                        type: string
+                        example: "1 день 3 часа"
+                      deferred:
+                        type: string
+                        example: "1 день 3 часа"
+                      booked:
+                        type: string
+                        example: "1 день 3 часа"
+                      default:
+                        type: string
+                        example: "1 день 3 часа"
+                      check:
+                        type: string
+                        example: "1 день 3 часа"
+                      selection:
+                        type: string
+                        example: "1 день 3 часа"
+              example:
+                headers:
+                  - name: "id"
+                    is_id: true
+                    title: "№"
+                    is_visible: false
+                    is_additional: false
+                    format: "number"
+                  - name: "status_name"
+                    title: "Наименование статуса"
+                    is_id: false
+                    format: "string"
+                    is_visible: true
+                    is_additional: false
+                  - name: "no_purpose"
+                    title: "Не целевое"
+                    is_id: false
+                    format: "number"
+                    is_visible: true
+                    is_additional: true
+                  - name: "rejected"
+                    title: "Отказ"
+                    is_id: false
+                    format: "number"
+                    is_visible: true
+                    is_additional: true
+                  - name: "deferred"
+                    title: "Отложено"
+                    is_id: false
+                    format: "number"
+                    is_visible: true
+                    is_additional: true
+                  - name: "booked"
+                    title: "Бронь"
+                    is_id: false
+                    format: "number"
+                    is_visible: true
+                    is_additional: true
+                  - name: "default"
+                    title: "Не разобрано"
+                    is_id: false
+                    format: "number"
+                    is_visible: true
+                    is_additional: true
+                  - name: "check"
+                    title: "Проверка"
+                    is_id: false
+                    format: "number"
+                    is_visible: true
+                    is_additional: true
+                  - name: "selection"
+                    title: "Подбор"
+                    is_id: false
+                    format: "number"
+                    is_visible: true
+                    is_additional: true
+                data:
+                  - id: 1
+                    status_name: "Количество заявок"
+                    no_purpose: 3000
+                    rejected: 2000
+                    deferred: 10000
+                    booked: 13422
+                    default: 1322
+                    check: 1452
+                    selection: 1246
+                footer:
+                  id: 0
+                  status_name: "Среднее время"
+                  no_purpose: "1 день 3 часа"
+                  rejected: "1 день 3 часа"
+                  deferred: "1 день 3 часа"
+                  booked: "1 день 3 часа"
+                  default: "1 день 3 часа"
+                  check: "1 день 3 часа"
+                  selection: "1 день 3 часа"
+  /api/process-speed/export:
+    get:
+      summary: Экспорт данных в формате Excel
+      description: Экспортирует отфильтрованные данные о статусах в формате Excel.
+      parameters:
+        - name: search
+          in: query
+          description: Поиск по ФИО. Если пустой, поиск не применяется.
+          required: false
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          description: Начальная дата в формате ISO 8601 (YYYY-MM-DDTHH:mm:ss.sssZ).
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          description: Конечная дата в формате ISO 8601 (YYYY-MM-DDTHH:mm:ss.sssZ).
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: sort
+          in: query
+          description: Поле для сортировки (`fio_asc`, `count1_desc`, и т.д.).
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Успешный экспорт файла.
+          content:
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+                example: |
+                  <Base64-закодированные данные файла Excel>
+  /api/users:
+    get:
+      summary: Получить список пользователей
+      description: Получает список пользователей с возможностью фильтрации по ФИО и сортировки.
+      parameters:
+        - name: search
+          in: query
+          description: Поиск по ФИО. Если пустой, поиск не применяется.
+          required: false
+          schema:
+            type: string
+        - name: sort
+          in: query
+          description: Поле для сортировки (например, `fio_asc`, `fio_desc`).
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Список пользователей
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+              examples:
+                example1:
+                  value:
+                    headers:
+                      - is_sortable: true
+                        is_aside_header: false
+                        name: id
+                        is_id: true
+                        title: "№"
+                        is_visible: false
+                        is_additional: false
+                        format: "number"
+                      - is_sortable: true
+                        is_aside_header: true
+                        name: fio
+                        is_id: false
+                        title: "ФИО"
+                        is_visible: true
+                        is_additional: false
+                        format: "string"
+                      - is_sortable: true
+                        is_aside_header: false
+                        name: login
+                        is_id: false
+                        title: "Логин"
+                        is_visible: true
+                        is_additional: false
+                        format: "string"
+                      - is_sortable: false
+                        is_aside_header: false
+                        name: role
+                        is_id: false
+                        title: "Роль"
+                        is_visible: true
+                        is_additional: false
+                        format: "string"
+                      - is_sortable: false
+                        is_aside_header: false
+                        name: created_at
+                        is_id: false
+                        title: "Дата регистрации"
+                        is_visible: true
+                        is_additional: false
+                        format: "date"
+                      - is_sortable: false
+                        is_aside_header: false
+                        name: surname
+                        is_id: false
+                        title: "Фамилия"
+                        is_visible: false
+                        is_additional: false
+                        format: "string"
+                      - is_sortable: false
+                        is_aside_header: false
+                        name: patronymic
+                        is_id: false
+                        title: "Отчество"
+                        is_visible: false
+                        is_additional: false
+                        format: "string"
+                      - is_sortable: false
+                        is_aside_header: false
+                        name: name
+                        is_id: false
+                        title: "Имя"
+                        is_visible: false
+                        is_additional: false
+                        format: "string"
+                      - is_sortable: false
+                        is_aside_header: false
+                        name: action
+                        is_id: false
+                        title: ""
+                        is_visible: true
+                        is_additional: false
+                        format: "enum"
+                    data:
+                      - id: 1
+                        fio: "Иванов Иван Иванович"
+                        login: "ivanov"
+                        action: "edit"
+                        role: "admin"
+                        created_at: "2021-01-01"
+                        surname: "Иванов"
+                        patronymic: "Иванович"
+                        name: "Иван"
+
+                      - id: 2
+                        fio: "Петров Петр Петрович"
+                        login: "petrov"
+                        action: "edit"
+                        role: "user"
+                        created_at: "2021-01-02"
+                        surname: "Петров"
+                        patronymic: "Петрович"
+                        name: "Петр"
+                      - id: 3
+                        fio: "Сидоров Сидор Сидорович"
+                        login: "sidorov"
+                        action: "edit"
+                        role: "user"
+                        created_at: "2021-01-03"
+                        surname: "Сидоров"
+                        patronymic: "Сидорович"
+                        name: "Сидор"
+        '400':
+          description: Ошибка запроса
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+    post:
+      summary: Создание нового пользователя
+      description: Создает нового пользователя с переданными данными.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreateRequest'
+      responses:
+        '201':
+          description: Успешно создан новый пользователь
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+        '400':
+          description: Ошибка в данных
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: string
+              examples:
+                example1:
+                  value:
+                    errors:
+                      - "Поле 'Имя' не может быть пустым"
+                example2:
+                  value:
+                    errors:
+                      - "Пользователь с таким логином уже существует"
+  /api/users/{userId}:
+    put:
+      summary: Обновление данных пользователя
+      description: Обновляет данные существующего пользователя.
+      parameters:
+        - name: userId
+          in: path
+          example: 1
+          description: ID пользователя для обновления
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateRequest'
+      responses:
+        '200':
+          description: Успешно обновлены данные пользователя
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+              example: 1
+
+        '400':
+          description: Ошибка в данных
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: string
+
+
+components:
+  schemas:
+    Header:
+      type: object
+      description: Столбец заголовка таблицы
+      properties:
+        is_sortable:
+          type: boolean
+          description: Возможность сортировки по столбцу.
+          example: true
+        is_aside_header:
+          type: boolean
+          description: Является ли столбец заголовком.
+        name:
+          type: string
+          description: название столбца.
+        is_id:
+          type: boolean
+          description: Является ли столбец идентификатором.
+        title:
+          type: string
+          description: Отображаемое значение столбца.
+        is_visible:
+          type: boolean
+          description: Видимость столбца для пользователя.
+        is_additional:
+          type: boolean
+          description: Можно ли скрыть столбец через кастомизацию.
+        format:
+          type: string
+          description: Формат данных в столбце.
+          enum:
+            - number
+            - enum
+            - string
+            - array
+            - date
+            - percent
+    Data:
+      type: object
+      description: Строка таблицы
+      properties:
+        is_anomaly:
+          type: boolean
+          description: Является аномальным значением.
+        key:
+          type: string
+          description: ключ - название столбца, значение - значение ячейки.
+    Footer:
+      type: object
+      description: Итоговая строка таблицы
+      properties:
+        is_anomaly:
+          type: boolean
+          description: Является аномальным значением.
+        key:
+          type: string
+          description: ключ - название столбца, значение - значение ячейки.
+
+    Table:
+      type: object
+      description: Табличная структура
+      properties:
+        headers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Header'
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Data'
+        footer:
+          $ref: '#/components/schemas/Footer'
+
+    Cabinet:
+      type: object
+      description: Рекламный кабинет
+      properties:
+        id:
+          type: integer
+          example: 1
+        title:
+          type: string
+          description: yandex, google, facebook
+          example: yandex
+    Integration:
+      type: object
+      description: Вид подключения для отображения
+      properties:
+        cabinet:
+          $ref: '#/components/schemas/Cabinet'
+        id:
+          type: integer
+          description: Идентификатор интеграции
+          example: 1
+    IntegrationRequest:
+      type: object
+      description: Запрос на подключение
+      properties:
+        cabinet:
+          type: integer
+          example: 1
+          description: id кабинета
+        audiences:
+          type: array
+          items:
+            type: integer
+            example: 1
+          example: [1, 2, 3]
+    Audience:
+      type: object
+      description: Аудитория
+      properties:
+        id:
+          type: integer
+          description: Идентификатор аудитории
+          example: 1
+        name:
+          type: string
+          description: Название
+          example: "Бронь"
+        duration:
+          type: string
+          description: Продолжительность
+          example: '1 день 3 часа'
+        created:
+          type: string
+          description: Дата создания
+          example: Sat Oct 19 2024 17:47:50 GMT+0300 (Москва, стандартное время)
+        updated:
+          type: string
+          description: Дата изменения
+          example: Sat Oct 19 2024 17:47:50 GMT+0300 (Москва, стандартное время)
+        integrated:
+          type: array
+          items:
+            $ref: '#/components/schemas/Integration'
+    AudienceCreateRequest:
+      type: object
+      description: необходимо выбрать или список заявок или критерии отбора
+      properties:
+        name:
+          type: string
+          description: Название
+          example: "Бронь"
+        start:
+          type: string
+          example: Sat Oct 19 2024 17:47:50 GMT+0300 (Москва, стандартное время)
+        end:
+          type: string
+          example: Sat Oct 19 2024 17:47:50 GMT+0300 (Москва, стандартное время)
+        status_id:
+          type: integer
+        reason_status_reject:
+          type: integer
+        reason_status_no_purpose:
+          type: integer
+        applications:
+          type: array
+          items:
+            type: integer
+          example: [1, 2, 3]
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Идентификатор пользователя
+          example: 1
+        name:
+          type: string
+          description: Имя пользователя
+          example: "Иван"
+        surname:
+          type: string
+          description: Фамилия пользователя
+          example: "Иванов"
+        patronymic:
+          type: string
+          description: Отчество пользователя
+          example: "Иванович"
+        login:
+          type: string
+          description: Логин пользователя
+          example: "ivanov"
+        fio:
+          type: string
+          description: ФИО пользователя
+          example: "Иванов Иван Иванович"
+    UserCreateRequest:
+      type: object
+      properties:
+        name:
+          # required: true
+          type: string
+        surname:
+          # required: true
+          type: string
+        patronymic:
+          type: string
+        login:
+          # required: true
+          type: string
+        password:
+          # required: true
+          type: string
+    UserUpdateRequest:
+      type: object
+      properties:
+        password:
+          type: string
