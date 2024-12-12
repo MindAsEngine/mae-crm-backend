@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"reporting-service/internal/middleware"
 	"reporting-service/internal/api"
 	"reporting-service/internal/repository"
 	"reporting-service/internal/services"
@@ -15,6 +16,7 @@ func main() {
 	db := repository.InitPostgres()
 	cache := repository.InitRedis()
 	broker := repository.InitRabbitMQ()
+
 
 	// Инициализация сервиса
 	report_repo := repository.ReportsRepo{Db: db}
@@ -41,6 +43,9 @@ func main() {
 	
 	// Создание HTTP роутеров
 	router := gin.Default()
+
+	router.Use(middleware.CORSMiddleware())
+
 	api.RegisterRoutes(router, report_service, audience_service)
 
 	// Запуск планировщика
