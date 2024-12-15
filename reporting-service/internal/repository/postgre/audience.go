@@ -7,10 +7,19 @@ import (
 
 	//"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"go.uber.org/zap"
 )
 
 type PostgresAudienceRepository struct {
 	db *sqlx.DB
+	logger *zap.Logger
+}
+
+func NewPostgresAudienceRepository(db *sqlx.DB) *PostgresAudienceRepository {
+    return &PostgresAudienceRepository{
+        db:     db,
+        logger: zap.L().With(zap.String("repository", "postgres_audience")),
+    }
 }
 
 func (r *PostgresAudienceRepository) Create(ctx context.Context, audience *domain.Audience) error {

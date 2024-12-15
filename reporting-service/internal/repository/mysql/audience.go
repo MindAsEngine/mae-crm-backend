@@ -7,10 +7,12 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"go.uber.org/zap"
 )
 
 type MySQLAudienceRepository struct {
     db *sqlx.DB
+	logger *zap.Logger
 }
 
 
@@ -26,6 +28,14 @@ type ValidationError struct {
 	Field string
 	Error string
 }
+
+func NewMySQLAudienceRepository(db *sqlx.DB) *MySQLAudienceRepository {
+    return &MySQLAudienceRepository{
+        db:     db,
+        logger: zap.L().With(zap.String("repository", "mysql_audience")),
+    }
+}
+
 
 func validateAudienceFilter(filter domain.AudienceFilter) []ValidationError {
 	var errors []ValidationError
