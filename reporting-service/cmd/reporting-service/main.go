@@ -17,7 +17,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/cors"
 	"go.uber.org/zap"
-	"reporting-service/internal/config"
+	config "reporting-service/internal/config"
 	"reporting-service/internal/api"
 	
 	"reporting-service/internal/services/audience"
@@ -26,45 +26,86 @@ import (
 	postgreRepo "reporting-service/internal/repository/postgre"
 )
 
+func connectWithRetry(cfg *config.Config, logger *zap.Logger) (*sqlx.DB, error) {
+    var db *sqlx.DB
+    var err error
+    
+    for i := 0; i < cfg.MySQL.MaxRetries; i++ {
+        db, err = sqlx.Connect("mysql", cfg.MySQL.DSN)
+        if err == nil {
+            return db, nil
+        }
+        
+        logger.Warn("Failed to connect to MySQL, retrying...",
+            zap.Int("attempt", i+1),
+            zap.Error(err))
+            
+        time.Sleep(cfg.MySQL.RetryInterval)
+    }
+    
+    return nil, fmt.Errorf("failed to connect after %d attempts: %w", 
+        cfg.MySQL.MaxRetries, err)
+}
+
 func main() {
     // Initialize logger
     logger, err := zap.NewProduction()
     if err != nil {
         log.Fatalf("Failed to initialize logger: %v", err)
-    }
+    } else {
+        log.Print("Logger initialized")
+		logger.Info("Logger initialized")
+
+	}
     defer logger.Sync()
 
     // Load configuration
     cfg, err := config.Load()
     if err != nil {
         logger.Fatal("Failed to load config", zap.Error(err))
-    }
+    } else{
+		log.Print("Config loaded")
+		logger.Info("Config loaded")
+	}
 
     // Connect to MySQL
-    mysqlDB, err := sqlx.Connect("mysql", cfg.MySQL.DSN)
+    mysqlDB, err := connectWithRetry(cfg, logger)
     if err != nil {
         logger.Fatal("Failed to connect to MySQL", zap.Error(err))
-    }
+    } else{
+		log.Print("Connected to MySQL")
+		logger.Info("Connected to MySQL")
+
+	}
     defer mysqlDB.Close()
 
     // Connect to PostgreSQL
     postgresDB, err := sqlx.Connect("postgres", cfg.Postgres.DSN)
     if err != nil {
         logger.Fatal("Failed to connect to PostgreSQL", zap.Error(err))
-    }
+    } else{
+		log.Print("Connected to PostgreSQL")
+		logger.Info("Connected to PostgreSQL")
+	}
     defer postgresDB.Close()
 
     // Connect to RabbitMQ
     amqpConn, err := amqp.Dial(cfg.RabbitMQ.URL)
     if err != nil {
         logger.Fatal("Failed to connect to RabbitMQ", zap.Error(err))
-    }
+    } else {
+		log.Print("Connected to RabbitMQ")
+		logger.Info("Connected to RabbitMQ")
+	}
     defer amqpConn.Close()
 
     amqpChan, err := amqpConn.Channel()
     if err != nil {
         logger.Fatal("Failed to create RabbitMQ channel", zap.Error(err))
-    }
+    } else{
+		log.Print("Created RabbitMQ channel")
+		logger.Info("Created RabbitMQ channel")
+	}
     defer amqpChan.Close()
 
     // Initialize repositories
@@ -86,7 +127,7 @@ func main() {
     handler.RegisterRoutes(router)
 
     corsHandler := cors.New(cors.Options{
-        AllowedOrigins:   []string{"http://localhost:5173"},
+        AllowedOrigins:   []string{"*"},// localhost:3000
         AllowedMethods:   []string{"GET", "POST", "DELETE", "OPTIONS"},
         AllowedHeaders:   []string{"Content-Type", "Authorization"},
         AllowCredentials: true,
@@ -103,7 +144,7 @@ func main() {
         logger.Info("Starting server", zap.Int("port", cfg.Server.Port))
         if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
             logger.Fatal("Server failed", zap.Error(err))
-        }
+        } 
     }()
 
     // Graceful shutdown

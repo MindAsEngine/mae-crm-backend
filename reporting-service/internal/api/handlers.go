@@ -2,11 +2,14 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
+
+	//"gorm.io/gorm/logger"
 
 	"reporting-service/internal/domain"
 	"reporting-service/internal/services/audience"
@@ -45,6 +48,7 @@ func (h *Handler) GetAudiences(w http.ResponseWriter, r *http.Request) {
 
     audiences, err := h.audienceService.List(ctx)
     if err != nil {
+		log.Print("failed to get audiences","\nRequest: ",r,"\nResponce: ",w,"\nError: ",err)
         h.errorResponse(w, "failed to get audiences", err, http.StatusInternalServerError)
         return
     }
@@ -57,12 +61,13 @@ func (h *Handler) CreateAudience(w http.ResponseWriter, r *http.Request) {
     
     var req domain.AudienceCreateRequest
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        h.errorResponse(w, "invalid request body", err, http.StatusBadRequest)
+		h.errorResponse(w, "invalid request body", err, http.StatusBadRequest)
         return
     }
 
     audience, err := h.audienceService.Create(ctx, req)
     if err != nil {
+		log.Print("failed to create audience","\nRequest: ",r,"\nResponce: ",w,"\nError: ",err)
         h.errorResponse(w, "failed to create audience", err, http.StatusInternalServerError)
         return
     }
@@ -81,7 +86,8 @@ func (h *Handler) DeleteAudience(w http.ResponseWriter, r *http.Request) {
     }
 
     if err := h.audienceService.Delete(ctx, audienceID); err != nil {
-        h.errorResponse(w, "failed to delete audience", err, http.StatusInternalServerError)
+		log.Print("failed to delete audience","\nRequest: ",r,"\nResponce: ",w,"\nError: ",err)
+		h.errorResponse(w, "failed to delete audience", err, http.StatusInternalServerError)
         return
     }
 
@@ -99,7 +105,8 @@ func (h *Handler) DisconnectAudience(w http.ResponseWriter, r *http.Request) {
     }
 
     if err := h.audienceService.DisconnectAll(ctx, audienceID); err != nil {
-        h.errorResponse(w, "failed to disconnect audience", err, http.StatusInternalServerError)
+		log.Print("failed to disconnect audience","\nRequest: ",r,"\nResponce: ",w,"\nError: ",err)
+		h.errorResponse(w, "failed to disconnect audience", err, http.StatusInternalServerError)
         return
     }
 
@@ -118,7 +125,8 @@ func (h *Handler) ExportAudience(w http.ResponseWriter, r *http.Request) {
 
     filePath, err := h.audienceService.Export(ctx, audienceID)
     if err != nil {
-        h.errorResponse(w, "failed to export audience", err, http.StatusInternalServerError)
+		log.Print("failed to export audience","\nRequest: ",r,"\nResponce: ",w,"\nError: ",err)
+		h.errorResponse(w, "failed to export audience", err, http.StatusInternalServerError)
         return
     }
 
