@@ -26,6 +26,8 @@ type MySQLConfig struct {
     DSN             string        `yaml:"dsn"`
     MaxOpenConns    int           `yaml:"max_open_conns"`
     MaxIdleConns    int           `yaml:"max_idle_conns"`
+    MaxRetries      int           `yaml:"max_retries"`
+    RetryInterval   time.Duration `yaml:"retry_interval"`
     ConnMaxLifetime time.Duration `yaml:"conn_max_lifetime"`
 }
 

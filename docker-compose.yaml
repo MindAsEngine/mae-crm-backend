@@ -1,4 +1,4 @@
-version: '3.9'
+version: '3'
 
 services:
   # # Audience Service
@@ -17,39 +17,47 @@ services:
   #     - redis
   #     - rabbitmq
 
-  # Ads Integration Service
-  ads-integration-service:
-    restart: unless-stopped
-    build:
-      context: ./ads-integration-service
-      dockerfile: Dockerfile
-    container_name: ads-integration-service
-    ports:
-      - "8081:8081"
-    environment:
-      - DATABASE_URL=postgresql://postgres:password@db:5432/ads_integration_db
-      - QUEUE_URL=amqp://guest:guest@rabbitmq:5672
-    depends_on:
-      - db
-      - redis
-      - rabbitmq
+  # # Ads Integration Service
+  # ads-integration-service:
+  #   restart: unless-stopped
+  #   build:
+  #     context: ./ads-integration-service
+  #     dockerfile: Dockerfile
+  #   container_name: ads-integration-service
+  #   ports:
+  #     - "8081:8081"
+  #   environment:
+  #     - DATABASE_URL=postgresql://postgres:password@db:5432/ads_integration_db
+  #     - QUEUE_URL=amqp://guest:guest@rabbitmq:5672
+  #   depends_on:
+  #     #- logging-service
+  #     - db
+  #     - mysql
+  #     - redis
+  #     - rabbitmq
       
 
-  # CRM Integration Service
-  crm-integration-service:
-    build:
-      context: ./crm-integration-service
-      dockerfile: Dockerfile
-    container_name: crm-integration-service
-    ports:
-      - "8083:8083"
-    environment:
-      - CRM_API_URL=https://crm.example.com/api
-      - LOGGING_URL=http://logging-service:8084/logs
-    depends_on:
-      - logging-service
+  # # CRM Integration Service
+  # crm-integration-service:
+  #   restart: unless-stopped
+  #   build:
+  #     context: ./crm-integration-service
+  #     dockerfile: Dockerfile
+  #   container_name: crm-integration-service
+  #   ports:
+  #     - "8083:8083"
+  #   environment:
+  #     - CRM_API_URL=https://crm.example.com/api
+  #     - LOGGING_URL=http://logging-service:8084/logs
+  #   depends_on:
+  #     #- logging-service
+  #     - db
+  #     - mysql
+  #     - redis
+  #     - rabbitmq
 
   # Reporting Service
+
   reporting-service:
     restart: unless-stopped
     build:
@@ -59,39 +67,80 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - DATABASE_URL=postgresql://postgres:password@db:5432/reporting_db
+      - DATABASE_URL=postgresql://user:password@db:55432/reporting_db
+    networks:
+      - app-network
     depends_on:
-      - db
-      - redis
-      - rabbitmq
+      mysql:
+        condition: service_healthy
+      db:
+        condition: service_healthy
 
-  # Logging Service
-  logging-service:
-    build:
-      context: ./logging-service
-      dockerfile: Dockerfile
-    container_name: logging-service
-    ports:
-      - "8084:8084"
-    environment:
-      - ELASTICSEARCH_URL=http://elasticsearch:8088
-    depends_on:
-      - elasticsearch
+
+  # # Logging Service
+  # logging-service:
+  #   restart: unless-stopped
+  #   build:
+  #     context: ./logging-service
+  #     dockerfile: Dockerfile
+  #   container_name: logging-service
+  #   ports:
+  #     - "8084:8084"
+  #   environment:
+  #     - ELASTICSEARCH_URL=http://elasticsearch:8088
+  #   depends_on:
+  #     - elasticsearch
 
   # PostgreSQL
   db:
     image: postgres:15
-    container_name: db
+    container_name: postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
     ports:
-      - "5432:5432"
+      - "55432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d reports_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      - rabbitmq
+      - redis
+      - elasticsearch
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: macro_bi_cmp_528
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "33306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "user", "-ppassword"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    command: --default-authentication-plugin=mysql_native_password
+    depends_on:
+      - rabbitmq
+      - redis
+      - elasticsearch
+
 
   # Redis
   redis:
+    restart: unless-stopped
     image: redis:7
     container_name: redis
     ports:
@@ -99,6 +148,7 @@ services:
 
   # RabbitMQ
   rabbitmq:
+    restart: unless-stopped
     image: rabbitmq:3-management
     container_name: rabbitmq
     ports:
@@ -110,6 +160,7 @@ services:
 
   # Elasticsearch
   elasticsearch:
+    restart: unless-stopped
     image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
     container_name: elasticsearch
     environment:
@@ -123,4 +174,9 @@ services:
 
 volumes:
   postgres_data:
+  mysql_data:
   es_data:
+
+networks:
+  app-network:
+    driver: bridge
