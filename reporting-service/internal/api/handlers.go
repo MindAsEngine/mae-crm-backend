@@ -1,80 +1,148 @@
 package api
 
 import (
-	//"go/format"
+	"encoding/json"
 	"net/http"
-	"reporting-service/internal/domain"
-	"reporting-service/internal/services"
-	"time"
+	"strconv"
 
-	"github.com/gin-gonic/gin"
+	"github.com/gorilla/mux"
+	"go.uber.org/zap"
+
+	"reporting-service/internal/domain"
+	"reporting-service/internal/services/audience"
 )
 
-func RegisterRoutes(router *gin.Engine, report_service *services.ReportService, audience_service *services.AudienceService) {
-	router.GET("/reports/regions", func(c *gin.Context) {
-		// Извлечение параметров запроса
-		startDate := c.Query("start_date")
-		endDate := c.Query("end_date")
-		statuses := c.QueryArray("statuses")
-		timeFormat := time.RFC3339
-		// Валидация
-		if startDate == "" || endDate == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "start_date and end_date are required"})
-			return
-		}
-		ts, errs := time.Parse(timeFormat, startDate)
-		te, erre := time.Parse(timeFormat, endDate)
+type Response struct {
+    Error   string      `json:"error,omitempty"`
+    Data    interface{} `json:"data,omitempty"`
+}
 
-		if erre != nil || errs != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "start_date or end_date parsing error" +
-					"\nStartDateParsingErr" + errs.Error() +
-					"\nEndDateParsingErr" + erre.Error()})
-		}
-		// Конвертация параметров
-		reportFilter := domain.RegionReportFilter{
-			StartDate: ts,
-			EndDate:   te,
-			Statuses:  statuses,
-		}
+type Handler struct {
+    audienceService *audience.Service
+    logger         *zap.Logger
+}
 
-		// Передача параметров в сервис
-		report_service.GenerateRegionReport(c, reportFilter)
-	})
+func NewHandler(audienceService *audience.Service, logger *zap.Logger) *Handler {
+    return &Handler{
+        audienceService: audienceService,
+        logger:         logger,
+    }
+}
 
-	router.GET("/reports/speed", func(c *gin.Context) {
-		// Извлечение параметров фильтра
-		startDate := c.Query("start_date")
-		endDate := c.Query("end_date")
-		timeFormat := time.RFC3339
-		// Валидация
-		if startDate == "" || endDate == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "start_date and end_date are required"})
-			return
-		}
-		ts, errs := time.Parse(timeFormat, startDate)
-		te, erre := time.Parse(timeFormat, endDate)
+func (h *Handler) RegisterRoutes(r *mux.Router) {
+    api := r.PathPrefix("/api").Subrouter()
+    
+    // Audiences endpoints
+    api.HandleFunc("/audiences", h.GetAudiences).Methods(http.MethodGet)
+    api.HandleFunc("/audiences", h.CreateAudience).Methods(http.MethodPost)
+    api.HandleFunc("/audiences/{audienceId}", h.DeleteAudience).Methods(http.MethodDelete)
+    api.HandleFunc("/audiences/{audienceId}/disconnect", h.DisconnectAudience).Methods(http.MethodDelete)
+    api.HandleFunc("/audiences/{audienceId}/export", h.ExportAudience).Methods(http.MethodGet)
+}
 
-		if erre != nil || errs != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "start_date or end_date parsing error" +
-					"\nStartDateParsingErr" + errs.Error() +
-					"\nEndDateParsingErr" + erre.Error()})
-		}
-		// Формирование параметров
-		reportParams := domain.SpeedReportFilter{
-			StartDate: ts,
-			EndDate:   te,
-		}
+func (h *Handler) GetAudiences(w http.ResponseWriter, r *http.Request) {
+    ctx := r.Context()
 
-		// Передача параметров в сервис
-		report_service.GenerateSpeedReport(c, reportParams)
-	})
+    audiences, err := h.audienceService.List(ctx)
+    if err != nil {
+        h.errorResponse(w, "failed to get audiences", err, http.StatusInternalServerError)
+        return
+    }
 
-	// Маршруты для AudienceService
-	router.POST("/audiences", audience_service.CreateAudience)
-	router.GET("/audiences", audience_service.GetAudiences)
-	router.GET("/audiences/:id/export", audience_service.ExportAudience)
-	router.POST("/integrations", audience_service.CreateIntegration)
-	router.GET("/integrations", audience_service.GetIntegrations)
+    h.jsonResponse(w, audiences, http.StatusOK)
+}
+
+func (h *Handler) CreateAudience(w http.ResponseWriter, r *http.Request) {
+    ctx := r.Context()
+    
+    var req domain.AudienceCreateRequest
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        h.errorResponse(w, "invalid request body", err, http.StatusBadRequest)
+        return
+    }
+
+    audience, err := h.audienceService.Create(ctx, req)
+    if err != nil {
+        h.errorResponse(w, "failed to create audience", err, http.StatusInternalServerError)
+        return
+    }
+
+    h.jsonResponse(w, audience, http.StatusCreated)
+}
+
+func (h *Handler) DeleteAudience(w http.ResponseWriter, r *http.Request) {
+    ctx := r.Context()
+    vars := mux.Vars(r)
+    
+    audienceID, err := strconv.ParseInt(vars["audienceId"], 10, 64)
+    if err != nil {
+        h.errorResponse(w, "invalid audience id", err, http.StatusBadRequest)
+        return
+    }
+
+    if err := h.audienceService.Delete(ctx, audienceID); err != nil {
+        h.errorResponse(w, "failed to delete audience", err, http.StatusInternalServerError)
+        return
+    }
+
+    h.jsonResponse(w, map[string]string{"status": "success"}, http.StatusOK)
+}
+
+func (h *Handler) DisconnectAudience(w http.ResponseWriter, r *http.Request) {
+    ctx := r.Context()
+    vars := mux.Vars(r)
+    
+    audienceID, err := strconv.ParseInt(vars["audienceId"], 10, 64)
+    if err != nil {
+        h.errorResponse(w, "invalid audience id", err, http.StatusBadRequest)
+        return
+    }
+
+    if err := h.audienceService.DisconnectAll(ctx, audienceID); err != nil {
+        h.errorResponse(w, "failed to disconnect audience", err, http.StatusInternalServerError)
+        return
+    }
+
+    h.jsonResponse(w, map[string]string{"status": "success"}, http.StatusOK)
+}
+
+func (h *Handler) ExportAudience(w http.ResponseWriter, r *http.Request) {
+    ctx := r.Context()
+    vars := mux.Vars(r)
+    
+    audienceID, err := strconv.ParseInt(vars["audienceId"], 10, 64)
+    if err != nil {
+        h.errorResponse(w, "invalid audience id", err, http.StatusBadRequest)
+        return
+    }
+
+    filePath, err := h.audienceService.Export(ctx, audienceID)
+    if err != nil {
+        h.errorResponse(w, "failed to export audience", err, http.StatusInternalServerError)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    w.Header().Set("Content-Disposition", "attachment; filename=audience_export.xlsx")
+    http.ServeFile(w, r, filePath)
+}
+
+func (h *Handler) errorResponse(w http.ResponseWriter, message string, err error, code int) {
+    h.logger.Error(message,
+        zap.Error(err),
+        zap.Int("status_code", code))
+
+    h.jsonResponse(w, Response{
+        Error: message,
+    }, code)
+}
+
+func (h *Handler) jsonResponse(w http.ResponseWriter, data interface{}, code int) {
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(code)
+    
+    if err := json.NewEncoder(w).Encode(data); err != nil {
+        h.logger.Error("failed to encode response",
+            zap.Error(err))
+    }
 }

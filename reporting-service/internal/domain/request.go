@@ -2,8 +2,8 @@ package domain
 
 import (
 	"time"
-	"encoding/json"
-	"github.com/google/uuid"
+	//"encoding/json"
+	//"github.com/google/uuid"
 )
 
 type RequestStatus string
@@ -32,11 +32,12 @@ var (
 )
 
 type Request struct {
-	ID                 uuid.UUID        `json:"id" db:"id"`
+	ID                 int64        `json:"id" db:"id"`
 	CreatedAt          time.Time        `json:"created_at" db:"created_at"`
+	UpdatedAt          time.Time        `json:"updated_at" db:"updated_at"`
 	Status             RequestStatus    `json:"status" db:"status"`
 	RejectionReason    RejectionReason  `json:"rejection_reason,omitempty" db:"rejection_reason"`
 	NonTargetReason    NonTargetReason  `json:"non_target_reason,omitempty" db:"non_target_reason"`
-	ResponsibleUserID  uuid.UUID        `json:"responsible_user_id" db:"responsible_user_id"`
-	ClientData         json.RawMessage  `json:"client_data" db:"client_data"`
+	ResponsibleUserID  int64        `json:"responsible_user_id" db:"responsible_user_id"`
+	// ClientData         json.RawMessage  `json:"client_data" db:"client_data"`
 }
