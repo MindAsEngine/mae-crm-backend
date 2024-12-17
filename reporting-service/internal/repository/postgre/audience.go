@@ -47,16 +47,25 @@ func (r *PostgresAudienceRepository) Create(ctx context.Context, audience *domai
 	}
 
 	// Insert requests
-	for _, req := range audience.Requests {
+	for _, req := range audience.Applications {
 		query := `
             INSERT INTO audience_requests (
-                audience_id, request_id, status, reason, creation_date_from, creation_date_to
-            ) VALUES ($1, $2, $3, $4, $5, $6)`
+                audience_id,
+                request_id,
+                status_name,
+                status_id,
+                reason,
+                creation_date_from,
+                creation_date_to,
+                manager_id,
+                client_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)`
 
 		_, err = tx.ExecContext(ctx, query,
 			audience.ID,
 			req.ID,
-			req.Status,
+			req.StatusName,
+            req.StatusID,
 			req.NonTargetReason,
 			req.CreatedAt,
 			req.UpdatedAt,
@@ -163,33 +172,10 @@ func (r *PostgresAudienceRepository) List(ctx context.Context) ([]domain.Audienc
 		audiences[i].Integrations = integrations
 	}
 
-	// For each audience, get requests and integrations
-	// for i := range audiences {
-	// requestsQuery := `
-	//     SELECT request_id, status, reason, created_at, updated_at
-	//     FROM audience_requests
-	//     WHERE audience_id = $1`
-
-	// err = r.db.SelectContext(ctx, &audiences[i].Requests, requestsQuery, audiences[i].ID)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("select requests: %w", err)
-	// }
-
-	// integrationsQuery := `
-	//     SELECT cabinet_id, integration_id
-	//     FROM audience_integrations
-	//     WHERE audience_id = $1`
-
-	// err = r.db.SelectContext(ctx, &audiences[i].Integrations, integrationsQuery, audiences[i].ID)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("select integrations: %w", err)
-	// }
-	// }
-
 	return audiences, nil
 }
 
-func (r *PostgresAudienceRepository) UpdateRequests(ctx context.Context, audienceID int64, requests []domain.Application) error {
+func (r *PostgresAudienceRepository) UpdateApplications(ctx context.Context, audienceID int64, requests []domain.Application) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
@@ -210,10 +196,13 @@ func (r *PostgresAudienceRepository) UpdateRequests(ctx context.Context, audienc
         INSERT INTO audience_requests (
             audience_id,
             request_id,
-            status,
+            status_name,
+            status_id,
             reason,
             created_at,
-            updated_at
+            updated_at,
+            manager_id,
+            client_id
         ) VALUES ($1, $2, $3, $4, $5, $6)`)
 	if err != nil {
 		return fmt.Errorf("prepare statement: %w", err)
@@ -227,10 +216,12 @@ func (r *PostgresAudienceRepository) UpdateRequests(ctx context.Context, audienc
 			req.ID,
 			req.CreatedAt,
 			req.UpdatedAt,
-			req.Status,
+			req.StatusName,
+			req.StatusID,
 			req.RejectionReason,
 			req.NonTargetReason,
-			req.ResponsibleUserID,
+			req.ManagerID,
+            req.ClientID,
 		)
 		if err != nil {
 			return fmt.Errorf("insert request %d: %w", req.ID, err)
