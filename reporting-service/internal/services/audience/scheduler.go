@@ -92,7 +92,7 @@ func (s *AudienceUpdateService) processAllAudiences(ctx context.Context) error {
 }
 
 func (s *AudienceUpdateService) processAudience(ctx context.Context, audience *domain.Audience) error {
-    requests, err := s.mysqlRepo.GetApplicationsByFilter(ctx, audience.Filter)
+    requests, err := s.mysqlRepo.GetApplicationsByAudienceFilter(ctx, audience.Filter)
     if err != nil {
         return fmt.Errorf("get requests: %w", err)
     }

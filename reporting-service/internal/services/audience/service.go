@@ -101,7 +101,7 @@ func (s *Service) Create(ctx context.Context, req domain.AudienceCreateRequest) 
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
 	}
-    applications, err := s.mysqlRepo.GetApplicationsByFilter(ctx, req.Filter)
+    applications, err := s.mysqlRepo.GetApplicationsByAudienceFilter(ctx, req.Filter)
 
     if err != nil {
         return nil, fmt.Errorf("get applications: %w", err)
@@ -146,7 +146,7 @@ func (s *Service) UpdateAudience(ctx context.Context, id int64) error {
 		return fmt.Errorf("get audience: %w", err)
 	}
 
-	requests, err := s.mysqlRepo.GetApplicationsByFilter(ctx, audience.Filter)
+	requests, err := s.mysqlRepo.GetNewApplicationsByAudience(ctx, audience)
 	if err != nil {
 		return fmt.Errorf("get requests: %w", err)
 	}

@@ -182,28 +182,21 @@ func (r *PostgresAudienceRepository) UpdateApplications(ctx context.Context, aud
 	}
 	defer tx.Rollback()
 
-	// Delete existing requests for this audience
-	_, err = tx.ExecContext(ctx, `
-        DELETE FROM audience_requests 
-        WHERE audience_id = $1`,
-		audienceID)
-	if err != nil {
-		return fmt.Errorf("delete existing requests: %w", err)
-	}
+	// // Delete existing requests for this audience
+	// _, err = tx.ExecContext(ctx, `
+    //     DELETE FROM audience_requests 
+    //     WHERE audience_id = $1`,
+	// 	audienceID)
+	// if err != nil {
+	// 	return fmt.Errorf("delete existing requests: %w", err)
+	// }
 
 	// Batch insert new requests
 	stmt, err := tx.PrepareContext(ctx, `
         INSERT INTO audience_requests (
             audience_id,
             request_id,
-            status_name,
-            status_id,
-            reason,
-            created_at,
-            updated_at,
-            manager_id,
-            client_id
-        ) VALUES ($1, $2, $3, $4, $5, $6)`)
+        ) VALUES ($1, $2`)
 	if err != nil {
 		return fmt.Errorf("prepare statement: %w", err)
 	}
@@ -214,14 +207,6 @@ func (r *PostgresAudienceRepository) UpdateApplications(ctx context.Context, aud
 		_, err = stmt.ExecContext(ctx,
 			audienceID,
 			req.ID,
-			req.CreatedAt,
-			req.UpdatedAt,
-			req.StatusName,
-			req.StatusID,
-			req.RejectionReason,
-			req.NonTargetReason,
-			req.ManagerID,
-            req.ClientID,
 		)
 		if err != nil {
 			return fmt.Errorf("insert request %d: %w", req.ID, err)

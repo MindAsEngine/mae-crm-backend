@@ -55,7 +55,7 @@ func validateAudienceFilter(filter domain.AudienceFilter) []ValidationError {
 	return errors
 }
 
-func (r *MySQLAudienceRepository) GetApplicationsByFilter(ctx context.Context, filter domain.AudienceFilter) ([]domain.Application, error) {
+func (r *MySQLAudienceRepository) GetApplicationsByAudienceFilter(ctx context.Context, filter domain.AudienceFilter) ([]domain.Application, error) {
 	// Validate filter
 	errs := validateAudienceFilter(filter)
 	errs_string := ""
@@ -107,6 +107,81 @@ func (r *MySQLAudienceRepository) GetApplicationsByFilter(ctx context.Context, f
 		query += " AND ebrs.status_reason_id IN (:reason_ids)"
 		args["reason_ids"] = reasons
 	}
+
+	// Execute query
+	query, params, err := sqlx.Named(query, args)
+	if err != nil {
+		return nil, fmt.Errorf("failed to bind named params: %w", err)
+	}
+
+	query, params, err = sqlx.In(query, params...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to expand IN clause: %w", err)
+	}
+
+	query = r.db.Rebind(query)
+
+	var results []domain.Application
+	err = r.db.SelectContext(ctx, &results, query, params...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err)
+	}
+
+	return results, nil
+}
+
+func (r *MySQLAudienceRepository) GetNewApplicationsByAudience(ctx context.Context, audience *domain.Audience) ([]domain.Application, error) {
+	query := `
+        SELECT 
+            eb.id,
+            eb.date_added,
+            eb.updated_at,
+            eb.status_name,
+            eb.status_reason_id,
+			eb.manager_id,
+			eb.contacts_id,
+            ebrs.type,
+			ebrs.status_reason_id,
+			ebrs.name,
+        FROM estate_buys as eb LEFT JOIN estate_statuses_reasons as ebrs
+        ON ebrs.status_reason_id=eb.status_reason_id
+		WHERE 1=1
+		`
+
+	args := map[string]interface{}{}
+
+	// Add date filters
+	if audience.Filter.CreationDateFrom != nil && audience.Filter.CreationDateTo != nil{
+		query += " AND eb.date_added >= :creation_date_from"
+		args["creation_date_from"] = audience.Filter.CreationDateFrom
+		query += " AND eb.date_added <= :creation_date_to"
+		args["creation_date_to"] = audience.Filter.CreationDateTo
+	}
+
+	// Add status filter
+	if len(audience.Filter.StatusIDs) > 0 {
+		query += " AND eb.status_id IN (:status_ids)"
+		args["statuse_ids"] = audience.Filter.StatusIDs
+	}
+
+	// Add reason filters
+	if len(audience.Filter.RejectionReasonIDs) > 0 || len(audience.Filter.NonTargetReasonIDs) > 0 {
+		reasons := append(audience.Filter.RejectionReasonIDs, audience.Filter.NonTargetReasonIDs...)
+		query += " AND ebrs.status_reason_id IN (:reason_ids)"
+		args["reason_ids"] = reasons
+	}
+
+
+    latestDate := audience.Applications[0].CreatedAt
+
+    for _, app := range audience.Applications {
+        if app.CreatedAt.After(latestDate) {
+            latestDate = app.CreatedAt
+        }
+    }
+
+	query += " AND eb.date_added >= :last_creation_date"
+	args["last_creation_date"] = latestDate
 
 	// Execute query
 	query, params, err := sqlx.Named(query, args)
