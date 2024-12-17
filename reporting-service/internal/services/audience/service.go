@@ -157,3 +157,18 @@ func (s *Service) UpdateAudience(ctx context.Context, id int64) error {
 
 	return nil
 }
+
+func (s *Service) UpdateAllAudiences(ctx context.Context) error {
+	audiences, err := s.audienceRepo.List(ctx)
+	if err != nil {
+		return fmt.Errorf("get audiences: %w", err)
+	}
+
+	for _, a := range audiences {
+		if err := s.UpdateAudience(ctx, a.ID); err != nil {
+			s.logger.Error("failed to update audience", zap.Int64("id", a.ID), zap.Error(err))
+		}
+	}
+
+	return nil
+}

@@ -22,7 +22,8 @@ rabbitmq:
   queue: "audience.updates"
 
 service:
-  update_time: "0 1 * * *"  # Every day at 1 AM
+  update_interval: "24h"
+  test_mode: true  # Set to true for testing
   batch_size: 1000
   export_path: "./exports"
 
