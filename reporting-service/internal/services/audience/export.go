@@ -52,11 +52,11 @@ func (e *ExcelExporter) ExportAudience(ctx context.Context, audienceID int64) (s
     }
     f.SetRowStyle(mainSheet, 1, 1, style)
 
-    for i, req := range audience.Requests {
+    for i, req := range audience.Applications {
         row := i + 2
         f.SetCellValue(mainSheet, fmt.Sprintf("A%d", row), req.ID)
-        f.SetCellValue(mainSheet, fmt.Sprintf("B%d", row), req.Status)
-        f.SetCellValue(mainSheet, fmt.Sprintf("C%d", row), req.RejectionReason)
+        f.SetCellValue(mainSheet, fmt.Sprintf("B%d", row), req.StatusName)
+        f.SetCellValue(mainSheet, fmt.Sprintf("C%d", row), req.ReasonName)
         f.SetCellValue(mainSheet, fmt.Sprintf("D%d", row), req.CreatedAt.Format(time.RFC3339))
         f.SetCellValue(mainSheet, fmt.Sprintf("E%d", row), req.UpdatedAt.Format(time.RFC3339))
     }
@@ -78,7 +78,12 @@ func (e *ExcelExporter) ExportAudience(ctx context.Context, audienceID int64) (s
     }
     
     f.SetCellValue(filterSheet, "A4", "Statuses")
-    f.SetCellValue(filterSheet, "B4", strings.Join(audience.Filter.Statuses, ", "))
+    f.SetCellValue(filterSheet, "B4", strings.Join(audience.Filter.StatusNames, ", "))
+
+    f.SetCellValue(filterSheet, "A5", "Statuses")
+    f.SetCellValue(filterSheet, "B5", strings.Join(audience.Filter.ReasonNames, ", "))
+
+
 
     f.SetColWidth(mainSheet, "A", "E", 15)
     f.SetColWidth(filterSheet, "A", "B", 20)
