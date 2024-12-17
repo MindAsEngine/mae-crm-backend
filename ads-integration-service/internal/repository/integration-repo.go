@@ -22,7 +22,7 @@ func InitPostgres() *sql.DB {
 }
 
 func (r *IntegrationRepo) GetIntegrationByID(id int) (*domain.Integration, error) {
-    query := "SELECT id, audience_id, platform, status, created_at FROM integrations WHERE id = $1"
+    query := "SELECT id, audience_id, cabinet_name, status, created_at FROM integrations WHERE id = $1"
     var integration domain.Integration
     err := r.DB.QueryRow(query, id).Scan(&integration.ID, &integration.AudienceID, &integration.Platform, &integration.Status, &integration.CreatedAt)
     if err != nil {

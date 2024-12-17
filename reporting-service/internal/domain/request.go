@@ -6,38 +6,32 @@ import (
 	//"github.com/google/uuid"
 )
 
-type RequestStatus string
 
-const (
-	StatusNew          RequestStatus = "new"
-	StatusInProgress   RequestStatus = "in_progress"
-	StatusRejected     RequestStatus = "rejected"
-	StatusNonTarget    RequestStatus = "non_target"
-	StatusCompleted    RequestStatus = "completed"
-)
-
-type RejectionReason string
-type NonTargetReason string
-
-var (
-	RejectionReasons = map[RejectionReason]string{
-		"insufficient_docs":    "Недостаточно документов",
-		"credit_history_issue": "Проблемы с кредитной историей",
-	}
-
-	NonTargetReasons = map[NonTargetReason]string{
-		"low_budget":      "Низкий бюджет",
-		"wrong_location":  "Неподходящая локация",
-	}
-)
-
-type Request struct {
-	ID                 int64        `json:"id" db:"id"`
-	CreatedAt          time.Time        `json:"created_at" db:"created_at"`
-	UpdatedAt          time.Time        `json:"updated_at" db:"updated_at"`
-	Status             RequestStatus    `json:"status" db:"status"`
-	RejectionReason    RejectionReason  `json:"rejection_reason,omitempty" db:"rejection_reason"`
-	NonTargetReason    NonTargetReason  `json:"non_target_reason,omitempty" db:"non_target_reason"`
-	ResponsibleUserID  int64        `json:"responsible_user_id" db:"responsible_user_id"`
-	// ClientData         json.RawMessage  `json:"client_data" db:"client_data"`
+type AudienceFilter struct {
+	CreationDateFrom *time.Time `json:"creation_date_from"`
+	CreationDateTo   *time.Time `json:"creation_date_to"`
+	Statuses         []string   `json:"statuses"`
+	RejectionReasons []string   `json:"rejection_reasons"`
+	NonTargetReasons []string   `json:"non_target_reasons"`
 }
+
+
+type AudienceMessage struct {
+	AudienceID    int64          `json:"audience_id"`
+	UpdatedAt     time.Time      `json:"updated_at"`
+	RequestCount  int            `json:"request_count"`
+	LastRequestID int64          `json:"last_request_id"`
+	Status        string         `json:"status"`
+	Filter        AudienceFilter `json:"filter"`
+}
+
+type AudienceCreateRequest struct {
+	Name   string         `json:"name" validate:"required"`
+	Filter AudienceFilter `json:"filter" validate:"required"`
+}
+
+type IntegrationsCreateRequest struct {
+    CabinetName string     `json:"cabinet_name"`
+    AudienceIds []int64    `json:"audience_ids"`
+}
+

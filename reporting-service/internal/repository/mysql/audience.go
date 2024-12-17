@@ -132,7 +132,7 @@ func validateAudienceFilter(filter domain.AudienceFilter) []ValidationError {
 	return errors
 }
 
-func (r *MySQLAudienceRepository) GetAudienceByFilter(ctx context.Context, filter domain.AudienceFilter) ([]domain.Request, error) {
+func (r *MySQLAudienceRepository) GetAudienceByFilter(ctx context.Context, filter domain.AudienceFilter) ([]domain.Application, error) {
 	// Validate filter
 	errs := validateAudienceFilter(filter)
 	errs_string := ""
@@ -195,7 +195,7 @@ func (r *MySQLAudienceRepository) GetAudienceByFilter(ctx context.Context, filte
 
 	query = r.db.Rebind(query)
 
-	var results []domain.Request
+	var results []domain.Application
 	err = r.db.SelectContext(ctx, &results, query, params...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)

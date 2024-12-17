@@ -112,6 +112,8 @@ services:
       - rabbitmq
       - redis
       - elasticsearch
+    networks:
+      - app-network
 
   mysql:
     image: mysql:8.0
@@ -136,15 +138,20 @@ services:
       - rabbitmq
       - redis
       - elasticsearch
-
+    networks:
+      - app-network
 
   # Redis
   redis:
     restart: unless-stopped
     image: redis:7
     container_name: redis
+    volumes:
+      - redis_data:/data
     ports:
       - "6379:6379"
+    networks:
+      - app-network
 
   # RabbitMQ
   rabbitmq:
@@ -157,6 +164,10 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - app-network
 
   # Elasticsearch
   elasticsearch:
@@ -171,11 +182,15 @@ services:
       - "8089:9300"
     volumes:
       - es_data:/usr/share/elasticsearch/data
+    networks:
+      - app-network
 
 volumes:
   postgres_data:
   mysql_data:
   es_data:
+  rabbitmq_data:
+  redis_data:
 
 networks:
   app-network:
