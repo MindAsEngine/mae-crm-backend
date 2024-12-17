@@ -56,8 +56,22 @@ services:
   #     - redis
   #     - rabbitmq
 
-  # Reporting Service
 
+  # # Logging Service
+  # logging-service:
+  #   restart: unless-stopped
+  #   build:
+  #     context: ./logging-service
+  #     dockerfile: Dockerfile
+  #   container_name: logging-service
+  #   ports:
+  #     - "8084:8084"
+  #   environment:
+  #     - ELASTICSEARCH_URL=http://elasticsearch:8088
+  #   depends_on:
+  #     - elasticsearch
+
+  # Reporting Service
   reporting-service:
     restart: unless-stopped
     build:
@@ -75,21 +89,6 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
-
-
-  # # Logging Service
-  # logging-service:
-  #   restart: unless-stopped
-  #   build:
-  #     context: ./logging-service
-  #     dockerfile: Dockerfile
-  #   container_name: logging-service
-  #   ports:
-  #     - "8084:8084"
-  #   environment:
-  #     - ELASTICSEARCH_URL=http://elasticsearch:8088
-  #   depends_on:
-  #     - elasticsearch
 
   # PostgreSQL
   db:
@@ -115,6 +114,7 @@ services:
     networks:
       - app-network
 
+  # MySQL
   mysql:
     image: mysql:8.0
     container_name: mysql
