@@ -10,12 +10,11 @@ type Application struct {
 	CreatedAt       time.Time  `json:"created_at" db:"date_added"`
 	UpdatedAt       time.Time  `json:"updated_at" db:"updated_at"`
 	StatusName      string     `json:"status_name" db:"status_name"`
-	StatusID        int64      `json:"status_id" db:"status_id"`
-	ReasonName      string     `json:"reason_name" db:"reason"`
-	RejectionReason int64      `json:"rejection_reason,omitempty" db:"rejection_reason"`
-	NonTargetReason int64      `json:"non_target_reason,omitempty" db:"non_target_reason"`
-	ManagerID       int64      `json:"responsible_user_id" db:"manager_id"`
+	ManagerID       int64      `json:"manager_id" db:"manager_id"`
 	ClientID        int64      `json:"client_id" db:"contacts_id"`
+	StatusID        int64      `json:"status_id" db:"status"`
+	ReasonName      string     `json:"reason_name" db:"name"`
+	ReasonId        int64      `json:"status_reason_id,omitempty" db:"status_reason_id"`
 	ClientData      ClientData `json:"client_data" db:"client_data"`
 }
 

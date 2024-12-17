@@ -97,7 +97,7 @@ func (s *AudienceUpdateService) processAudience(ctx context.Context, audience *d
         return fmt.Errorf("get requests: %w", err)
     }
 
-    if err := s.audienceRepo.UpdateApplications(ctx, audience.ID, requests); err != nil {
+    if err := s.audienceRepo.UpdateApplication(ctx, audience.ID, requests); err != nil {
         return fmt.Errorf("update requests: %w", err)
     }
 

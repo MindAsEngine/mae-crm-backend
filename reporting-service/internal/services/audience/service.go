@@ -2,9 +2,11 @@ package audience
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
+	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
 
 	"reporting-service/internal/domain"
@@ -16,6 +18,7 @@ type Service struct {
 	audienceRepo PostgreRepo.PostgresAudienceRepository
 	mysqlRepo    MysqlRepo.MySQLAudienceRepository
 	logger       *zap.Logger
+	rabbitMQ     *amqp.Channel
 	exporter     *ExcelExporter
 	config       Config
 }
@@ -47,9 +50,7 @@ func (s *Service) GetById(ctx context.Context, id int64) (*domain.AudienceRespon
 		return nil, fmt.Errorf("get audience: %w", err)
 	}
 
-	var response domain.AudienceResponse
-
-	response = domain.AudienceResponse{
+	var response = domain.AudienceResponse{
 		ID:           audience.ID,
 		Name:         audience.Name,
 		Integrations: audience.Integrations,
@@ -151,24 +152,71 @@ func (s *Service) UpdateAudience(ctx context.Context, id int64) error {
 		return fmt.Errorf("get requests: %w", err)
 	}
 
-	if err := s.audienceRepo.UpdateApplications(ctx, id, requests); err != nil {
+	if err := s.audienceRepo.UpdateApplication(ctx, id, requests); err != nil {
 		return fmt.Errorf("update requests: %w", err)
 	}
 
 	return nil
 }
 
-func (s *Service) UpdateAllAudiences(ctx context.Context) error {
-	audiences, err := s.audienceRepo.List(ctx)
-	if err != nil {
-		return fmt.Errorf("get audiences: %w", err)
-	}
+func (s *Service) ProcessAllAudiences(ctx context.Context) error {
+    audiences, err := s.audienceRepo.List(ctx)
+    if err != nil {
+        return fmt.Errorf("list audiences: %w", err)
+    }
 
-	for _, a := range audiences {
-		if err := s.UpdateAudience(ctx, a.ID); err != nil {
-			s.logger.Error("failed to update audience", zap.Int64("id", a.ID), zap.Error(err))
-		}
-	}
+    for _, audience := range audiences {
+        if err := s.processAudience(ctx, &audience); err != nil {
+            s.logger.Error("process audience failed",
+                zap.String("audience_id", string(audience.ID)),
+                zap.Error(err))
+            continue
+        }
+    }
+    return nil
+}
 
-	return nil
+func (s *Service) processAudience(ctx context.Context, audience *domain.Audience) error {
+    requests, err := s.mysqlRepo.GetApplicationsByAudienceFilter(ctx, audience.Filter)
+    if err != nil {
+        return fmt.Errorf("get requests: %w", err)
+    }
+
+    if err := s.audienceRepo.UpdateApplication(ctx, audience.ID, requests); err != nil {
+        return fmt.Errorf("update requests: %w", err)
+    }
+
+    // Prepare message for RabbitMQ
+    msg := domain.AudienceMessage{
+        AudienceID:    audience.ID,
+        UpdatedAt:     time.Now().UTC(),
+        RequestCount:  len(requests),
+        LastRequestID: requests[len(requests)-1].ID,
+    }
+
+    // Serialize message
+    body, err := json.Marshal(msg)
+    if err != nil {
+        return fmt.Errorf("marshal message: %w", err)
+    }
+
+    // Publish to RabbitMQ
+    err = s.rabbitMQ.PublishWithContext(ctx,
+        exchangeName,
+        queueName,
+        false,
+        false,
+        amqp.Publishing{
+            ContentType: "application/json",
+            Body:       body,
+        })
+    if err != nil {
+        return fmt.Errorf("publish message: %w", err)
+    }
+
+    s.logger.Info("audience processed and message published",
+        zap.String("audience_id", string(audience.ID)),
+        zap.Int("request_count", len(requests)))
+
+    return nil
 }

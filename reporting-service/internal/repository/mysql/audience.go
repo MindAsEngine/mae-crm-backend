@@ -39,19 +39,22 @@ func validateAudienceFilter(filter domain.AudienceFilter) []ValidationError {
 				Error: "start date must be before end date",
 			})
 		}
+		if filter.CreationDateTo.Sub(*filter.CreationDateFrom).Hours() > 8784 {
+			errors = append(errors, ValidationError{
+				Field: "date_range",
+				Error: "date range must be less than 366 days (8784 hours)",
+			})
+			
+		}
 	}
 
 	// At least one filter must be specified
-	if (filter.CreationDateFrom == nil || filter.CreationDateTo == nil) &&
-		len(filter.StatusIDs) == 0 &&
-		len(filter.RejectionReasonIDs) == 0 &&
-		len(filter.NonTargetReasonIDs) == 0 {
+	if (filter.CreationDateFrom == nil || filter.CreationDateTo == nil){
 		errors = append(errors, ValidationError{
 			Field: "filter",
-			Error: "at least one filter must be specified",
+			Error: "date range fields required",
 		})
 	}
-
 	return errors
 }
 
@@ -74,13 +77,12 @@ func (r *MySQLAudienceRepository) GetApplicationsByAudienceFilter(ctx context.Co
             eb.date_added,
             eb.updated_at,
             eb.status_name,
-            eb.status_reason_id,
 			eb.manager_id,
 			eb.contacts_id,
-            ebrs.type,
-			ebrs.status_reason_id,
+			eb.status,
 			ebrs.name,
-        FROM estate_buys as eb LEFT JOIN estate_statuses_reasons as ebrs
+			ebrs.status_reason_id
+        FROM estate_buys eb LEFT JOIN estate_statuses_reasons ebrs
         ON ebrs.status_reason_id=eb.status_reason_id
 		WHERE 1=1
 		`
@@ -98,7 +100,7 @@ func (r *MySQLAudienceRepository) GetApplicationsByAudienceFilter(ctx context.Co
 	// Add status filter
 	if len(filter.StatusIDs) > 0 {
 		query += " AND eb.status_id IN (:status_ids)"
-		args["statuse_ids"] = filter.StatusIDs
+		args["status_ids"] = filter.StatusIDs
 	}
 
 	// Add reason filters
@@ -171,6 +173,10 @@ func (r *MySQLAudienceRepository) GetNewApplicationsByAudience(ctx context.Conte
 		args["reason_ids"] = reasons
 	}
 
+	// Get the latest creation date of all applications in the audience
+	if len(audience.Applications) == 0 {
+		return nil, fmt.Errorf("audience has no applications")
+	}
 
     latestDate := audience.Applications[0].CreatedAt
 

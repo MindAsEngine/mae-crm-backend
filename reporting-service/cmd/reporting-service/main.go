@@ -53,9 +53,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize logger: %v", err)
 	} else {
-		log.Print("Logger initialized")
 		logger.Info("Logger initialized")
-
 	}
 	defer logger.Sync()
 
@@ -64,7 +62,6 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to load config", zap.Error(err))
 	} else {
-		log.Print("Config loaded")
 		logger.Info("Config loaded")
 	}
 
@@ -73,9 +70,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to connect to MySQL", zap.Error(err))
 	} else {
-		log.Print("Connected to MySQL")
 		logger.Info("Connected to MySQL")
-
 	}
 	defer mysqlDB.Close()
 
@@ -84,7 +79,6 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to connect to PostgreSQL", zap.Error(err))
 	} else {
-		log.Print("Connected to PostgreSQL")
 		logger.Info("Connected to PostgreSQL")
 	}
 	defer postgresDB.Close()
@@ -94,7 +88,6 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to connect to RabbitMQ", zap.Error(err))
 	} else {
-		log.Print("Connected to RabbitMQ")
 		logger.Info("Connected to RabbitMQ")
 	}
 	defer amqpConn.Close()
@@ -103,7 +96,6 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to create RabbitMQ channel", zap.Error(err))
 	} else {
-		log.Print("Created RabbitMQ channel")
 		logger.Info("Created RabbitMQ channel")
 	}
 	defer amqpChan.Close()
@@ -139,10 +131,6 @@ func main() {
 		Handler: corsHandler,
 	}
 
-	// Graceful shutdown
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
 	// Start server in goroutine
 	go func() {
 		logger.Info("Starting server", zap.Int("port", cfg.Server.Port))
@@ -151,47 +139,49 @@ func main() {
 		}
 	}()
 
-    updateInterval := 24 * time.Hour
-    startHour := 1
+    // updateInterval := 24 * time.Hour
+    // startHour := 1
 
-    if cfg.Service.TestMode {
-        updateInterval = 1 * time.Minute  // Test every minute
-        startHour = time.Now().Hour()     // Start from current hour
-    }
+    // if cfg.Service.TestMode {
+    //     updateInterval = 1 * time.Minute  // Test every minute
+    //     startHour = time.Now().Hour()     // Start from current hour
+    // }
 
-    // Start daily update scheduler
-    go func() {
-        now := time.Now()
-        nextRun := time.Date(now.Year(), now.Month(), now.Day(), startHour, 0, 0, 0, now.Location())
-        if now.After(nextRun) {
-            nextRun = nextRun.Add(updateInterval)
-        }
+    // //Start daily update scheduler
+    // go func() {
+    //     now := time.Now()
+    //     nextRun := time.Date(now.Year(), now.Month(), now.Day(), startHour, 0, 0, 0, now.Location())
+    //     if now.After(nextRun) {
+    //         nextRun = nextRun.Add(updateInterval)
+    //     }
 
-        timer := time.NewTimer(time.Until(nextRun))
-        defer timer.Stop()
+    //     timer := time.NewTimer(time.Until(nextRun))
+    //     defer timer.Stop()
 
-        ticker := time.NewTicker(updateInterval)
-        defer ticker.Stop()
+    //     ticker := time.NewTicker(updateInterval)
+    //     defer ticker.Stop()
 
-		for {
-			select {
-			case <-timer.C:
-				// First run
-				if err := audienceService.UpdateAllAudiences(context.Background()); err != nil {
-					logger.Error("Failed to update audiences", zap.Error(err))
-				}
-			case <-ticker.C:
-				// Subsequent runs
-				if err := audienceService.UpdateAllAudiences(context.Background()); err != nil {
-					logger.Error("Failed to update audiences", zap.Error(err))
-				}
-			case <-quit:
-				return
-			}
-		}
-	}()
+	// 	for {
+	// 		select {
+	// 		case <-timer.C:
+	// 			// First run
+	// 			if err := audienceService.ProcessAllAudiences(context.Background()); err != nil {
+	// 				logger.Error("Failed to process audiences", zap.Error(err))
+	// 			}
+	// 		case <-ticker.C:
+	// 			// Subsequent runs
+	// 			if err := audienceService.ProcessAllAudiences(context.Background()); err != nil {
+	// 				logger.Error("Failed to process audiences", zap.Error(err))
+	// 			}
+	// 		}
+	// 	}
+	// }()
+
+	
+	// Graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-
 	logger.Info("Shutting down server...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

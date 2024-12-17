@@ -31,17 +31,13 @@ func (r *PostgresAudienceRepository) Create(ctx context.Context, audience *domai
 
 	// Insert audience
 	query := `
-        INSERT INTO audiences (id, name, created_at, updated_at)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO audiences (name)
+        VALUES ($1)
         RETURNING id`
 
 	err = tx.QueryRowxContext(ctx, query,
-		audience.ID,
 		audience.Name,
-		audience.CreatedAt,
-		audience.UpdatedAt,
 	).Scan(&audience.ID)
-
 	if err != nil {
 		return fmt.Errorf("insert audience: %w", err)
 	}
@@ -51,24 +47,28 @@ func (r *PostgresAudienceRepository) Create(ctx context.Context, audience *domai
 		query := `
             INSERT INTO audience_requests (
                 audience_id,
-                request_id,
-                status_name,
-                status_id,
-                reason,
-                creation_date_from,
-                creation_date_to,
-                manager_id,
-                client_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)`
+                id,
+				date_added,
+				updated_at,
+				status_name,
+				manager_id,
+				contacts_id,
+				status,
+				name,
+				status_reason_id,
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 
 		_, err = tx.ExecContext(ctx, query,
 			audience.ID,
 			req.ID,
-			req.StatusName,
-            req.StatusID,
-			req.NonTargetReason,
 			req.CreatedAt,
 			req.UpdatedAt,
+			req.StatusName,
+			req.ManagerID,
+			req.ClientID,
+			req.StatusID,
+			req.ReasonName,
+			req.ReasonId,
 		)
 		if err != nil {
 			return fmt.Errorf("insert request: %w", err)
@@ -134,6 +134,14 @@ func (r *PostgresAudienceRepository) CreateIntegration(ctx context.Context, inte
 		return fmt.Errorf("insert integration: %w", err)
 	}
 
+	_, err = tx.ExecContext(ctx, `
+        UPDATE audiences 
+        SET updated_at = NOW() 
+        WHERE id = $1`,
+		audience_id)
+	if err != nil {
+		return fmt.Errorf("update audience timestamp: %w", err)
+	}
 	return tx.Commit()
 }
 
@@ -151,6 +159,22 @@ func (r *PostgresAudienceRepository) List(ctx context.Context) ([]domain.Audienc
 
 	if err := r.db.SelectContext(ctx, &audiences, audiencesQuery); err != nil {
 		return nil, fmt.Errorf("select audiences: %w", err)
+	}
+
+	// Get applications for each audience
+	for i := range audiences {
+		var applications []domain.Application
+		applicationsQuery := `
+			SELECT 
+				ar.id
+			FROM audience_requests ar
+			WHERE ar.audience_id = $1`
+
+		if err := r.db.SelectContext(ctx, &applications, applicationsQuery, audiences[i].ID); err != nil {
+			return nil, fmt.Errorf("select applications: %w", err)
+		}
+
+		audiences[i].Applications = applications
 	}
 
 	// Get integrations for each audience
@@ -175,27 +199,18 @@ func (r *PostgresAudienceRepository) List(ctx context.Context) ([]domain.Audienc
 	return audiences, nil
 }
 
-func (r *PostgresAudienceRepository) UpdateApplications(ctx context.Context, audienceID int64, requests []domain.Application) error {
+func (r *PostgresAudienceRepository) UpdateApplication(ctx context.Context, audienceID int64, requests []domain.Application) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	// // Delete existing requests for this audience
-	// _, err = tx.ExecContext(ctx, `
-    //     DELETE FROM audience_requests 
-    //     WHERE audience_id = $1`,
-	// 	audienceID)
-	// if err != nil {
-	// 	return fmt.Errorf("delete existing requests: %w", err)
-	// }
-
 	// Batch insert new requests
 	stmt, err := tx.PrepareContext(ctx, `
         INSERT INTO audience_requests (
             audience_id,
-            request_id,
+            request_id
         ) VALUES ($1, $2`)
 	if err != nil {
 		return fmt.Errorf("prepare statement: %w", err)

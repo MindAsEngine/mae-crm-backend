@@ -109,8 +109,8 @@ services:
       retries: 5
     depends_on:
       - rabbitmq
-      - redis
-      - elasticsearch
+      # - redis
+      # - elasticsearch
     networks:
       - app-network
 
@@ -136,20 +136,8 @@ services:
     command: --default-authentication-plugin=mysql_native_password
     depends_on:
       - rabbitmq
-      - redis
-      - elasticsearch
-    networks:
-      - app-network
-
-  # Redis
-  redis:
-    restart: unless-stopped
-    image: redis:7
-    container_name: redis
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
+      # - redis
+      # - elasticsearch
     networks:
       - app-network
 
@@ -169,28 +157,41 @@ services:
     networks:
       - app-network
 
-  # Elasticsearch
-  elasticsearch:
-    restart: unless-stopped
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
-    container_name: elasticsearch
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-    ports:
-      - "8088:9200"
-      - "8089:9300"
-    volumes:
-      - es_data:/usr/share/elasticsearch/data
-    networks:
-      - app-network
+  # # Elasticsearch
+  # elasticsearch:
+  #   restart: unless-stopped
+  #   image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
+  #   container_name: elasticsearch
+  #   environment:
+  #     - discovery.type=single-node
+  #     - xpack.security.enabled=false
+  #   ports:
+  #     - "8088:9200"
+  #     - "8089:9300"
+  #   volumes:
+  #     - es_data:/usr/share/elasticsearch/data
+  #   networks:
+  #     - app-network
+
+#  # Redis
+#   redis:
+#     restart: unless-stopped
+#     image: redis:7
+#     container_name: redis
+#     volumes:
+#       - redis_data:/data
+#     ports:
+#       - "6379:6379"
+#     networks:
+#       - app-network
+
 
 volumes:
   postgres_data:
   mysql_data:
-  es_data:
   rabbitmq_data:
-  redis_data:
+  # es_data:
+  # redis_data:
 
 networks:
   app-network:

@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -50,8 +49,7 @@ func (h *Handler) GetAudiences(w http.ResponseWriter, r *http.Request) {
 
     audiences, err := h.audienceService.List(ctx)
     if err != nil {
-		log.Print("failed to get audiences","\nRequest: ",r,"\nResponce: ",w,"\nError: ",err)
-        h.errorResponse(w, "failed to get audiences", err, http.StatusInternalServerError)
+        h.errorResponse(w, "failed to get audiences: "+err.Error()+"\n", err, http.StatusInternalServerError)
         return
     }
 
@@ -64,13 +62,12 @@ func (h *Handler) GetAudience(w http.ResponseWriter, r *http.Request) {
 
     audienceID, err := strconv.ParseInt(vars["audienceId"], 10, 64)
     if err != nil {
-        h.errorResponse(w, "invalid audience id", err, http.StatusBadRequest)
+        h.errorResponse(w, "invalid audience id: "+err.Error()+"\n", err, http.StatusBadRequest)
         return
     }
     audiences, err := h.audienceService.GetById(ctx, audienceID)
     if err != nil {
-		log.Print("failed to get audiences","\nRequest: ",r,"\nResponce: ",w,"\nError: ",err)
-        h.errorResponse(w, "failed to get audiences", err, http.StatusInternalServerError)
+        h.errorResponse(w, "failed to get audience by id: "+err.Error()+"\n", err, http.StatusInternalServerError)
         return
     }
 
@@ -82,14 +79,13 @@ func (h *Handler) CreateIntegrations(w http.ResponseWriter, r *http.Request) {
 
     var req domain.IntegrationsCreateRequest
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.errorResponse(w, "invalid request body", err, http.StatusBadRequest)
+		h.errorResponse(w, "invalid request body: "+err.Error()+"\n", err, http.StatusBadRequest)
         return
     }
 
     integrations, err := h.audienceService.CreateIntegrations(ctx, req)
     if err != nil {
-		log.Print("failed to create audience","\nRequest: ",r,"\nResponce: ",w,"\nError: ",err)
-        h.errorResponse(w, "failed to create audience", err, http.StatusInternalServerError)
+        h.errorResponse(w, "failed to create integration: "+err.Error()+"\n", err, http.StatusInternalServerError)
         return
     }
     h.jsonResponse(w, integrations, http.StatusCreated)
@@ -100,14 +96,13 @@ func (h *Handler) CreateAudience(w http.ResponseWriter, r *http.Request) {
 
     var req domain.AudienceCreateRequest
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.errorResponse(w, "invalid request body", err, http.StatusBadRequest)
+		h.errorResponse(w, "invalid request body: "+err.Error()+"\n", err, http.StatusBadRequest)
         return
     }
 
     audience, err := h.audienceService.Create(ctx, req)
     if err != nil {
-		log.Print("failed to create audience","\nRequest: ",r,"\nResponce: ",w,"\nError: ",err)
-        h.errorResponse(w, "failed to create audience", err, http.StatusInternalServerError)
+        h.errorResponse(w, "failed to create audience: "+err.Error()+"\n", err, http.StatusInternalServerError)
         return
     }
 
@@ -120,13 +115,12 @@ func (h *Handler) DeleteAudience(w http.ResponseWriter, r *http.Request) {
     
     audienceID, err := strconv.ParseInt(vars["audienceId"], 10, 64)
     if err != nil {
-        h.errorResponse(w, "invalid audience id", err, http.StatusBadRequest)
+        h.errorResponse(w, "invalid audience id: "+err.Error()+"\n", err, http.StatusBadRequest)
         return
     }
 
     if err := h.audienceService.Delete(ctx, audienceID); err != nil {
-		log.Print("failed to delete audience","\nRequest: ",r,"\nResponce: ",w,"\nError: ",err)
-		h.errorResponse(w, "failed to delete audience", err, http.StatusInternalServerError)
+		h.errorResponse(w, "failed to delete audience: "+err.Error()+"\n", err, http.StatusInternalServerError)
         return
     }
 
@@ -139,13 +133,12 @@ func (h *Handler) DisconnectAudience(w http.ResponseWriter, r *http.Request) {
     
     audienceID, err := strconv.ParseInt(vars["audienceId"], 10, 64)
     if err != nil {
-        h.errorResponse(w, "invalid audience id", err, http.StatusBadRequest)
+        h.errorResponse(w, "invalid audience id: "+err.Error()+"\n", err, http.StatusBadRequest)
         return
     }
 
     if err := h.audienceService.DisconnectAll(ctx, audienceID); err != nil {
-		log.Print("failed to disconnect audience","\nRequest: ",r,"\nResponce: ",w,"\nError: ",err)
-		h.errorResponse(w, "failed to disconnect audience", err, http.StatusInternalServerError)
+		h.errorResponse(w, "failed to disconnect audience: "+err.Error()+"\n", err, http.StatusInternalServerError)
         return
     }
 
@@ -158,14 +151,13 @@ func (h *Handler) ExportAudience(w http.ResponseWriter, r *http.Request) {
     
     audienceID, err := strconv.ParseInt(vars["audienceId"], 10, 64)
     if err != nil {
-        h.errorResponse(w, "invalid audience id", err, http.StatusBadRequest)
+        h.errorResponse(w, "invalid audience id: "+err.Error()+"\n", err, http.StatusBadRequest)
         return
     }
 
     filePath, err := h.audienceService.Export(ctx, audienceID)
     if err != nil {
-		log.Print("failed to export audience","\nRequest: ",r,"\nResponce: ",w,"\nError: ",err)
-		h.errorResponse(w, "failed to export audience", err, http.StatusInternalServerError)
+		h.errorResponse(w, "failed to export audience: "+err.Error()+"\n", err, http.StatusInternalServerError)
         return
     }
 
