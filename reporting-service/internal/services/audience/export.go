@@ -81,7 +81,7 @@ func (e *ExcelExporter) ExportAudience(ctx context.Context, audienceID int64) (s
     f.SetCellValue(filterSheet, "B4", strings.Join(audience.Filter.StatusNames, ", "))
 
     f.SetCellValue(filterSheet, "A5", "Statuses")
-    f.SetCellValue(filterSheet, "B5", strings.Join(audience.Filter.ReasonNames, ", "))
+    f.SetCellValue(filterSheet, "B5", strings.Join(audience.Filter.RegectionReasonNames, ", "))
 
 
 

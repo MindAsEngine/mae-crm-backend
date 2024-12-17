@@ -80,19 +80,19 @@ func (s *Service) List(ctx context.Context) ([]domain.AudienceResponse, error) {
 	return response, nil
 }
 
-func (s *Service) CreateIntegrations(ctx context.Context, req domain.IntegrationsCreateRequest) (*domain.IntegrationsCreateResponse, error) {  
-    integrations := make([]domain.Integration, 0, len(req.AudienceIds))
-    for _, id := range req.AudienceIds {
+func (s *Service) CreateIntegrations(ctx context.Context, req domain.IntegrationsCreateRequest) (*domain.IntegrationsCreateResponse, error) {
+	integrations := make([]domain.Integration, 0, len(req.AudienceIds))
+	for _, id := range req.AudienceIds {
 		integration := &domain.Integration{
 			AudienceID:  id,
 			CabinetName: req.CabinetName,
 		}
-        s.audienceRepo.CreateIntegration(ctx, integration, id)
-        integrations = append(integrations, *integration)
+		s.audienceRepo.CreateIntegration(ctx, integration, id)
+		integrations = append(integrations, *integration)
 	}
-    return &domain.IntegrationsCreateResponse{
-        Integrations: integrations,
-    } , nil 
+	return &domain.IntegrationsCreateResponse{
+		Integrations: integrations,
+	}, nil
 }
 
 func (s *Service) Create(ctx context.Context, req domain.AudienceCreateRequest) (*domain.AudienceResponse, error) {
@@ -102,13 +102,13 @@ func (s *Service) Create(ctx context.Context, req domain.AudienceCreateRequest) 
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
 	}
-    applications, err := s.mysqlRepo.GetApplicationsByAudienceFilter(ctx, req.Filter)
+	applications, err := s.mysqlRepo.GetApplicationsByAudienceFilter(ctx, req.Filter)
 
-    if err != nil {
-        return nil, fmt.Errorf("get applications: %w", err)
-    }
+	if err != nil {
+		return nil, fmt.Errorf("get applications: %w", err)
+	}
 
-    audience.Applications = applications
+	audience.Applications = applications
 
 	if err := s.audienceRepo.Create(ctx, audience); err != nil {
 		return nil, fmt.Errorf("create audience: %w", err)
@@ -160,63 +160,86 @@ func (s *Service) UpdateAudience(ctx context.Context, id int64) error {
 }
 
 func (s *Service) ProcessAllAudiences(ctx context.Context) error {
-    audiences, err := s.audienceRepo.List(ctx)
-    if err != nil {
-        return fmt.Errorf("list audiences: %w", err)
-    }
+	audiences, err := s.audienceRepo.List(ctx)
+	if err != nil {
+		return fmt.Errorf("list audiences: %w", err)
+	}
 
-    for _, audience := range audiences {
-        if err := s.processAudience(ctx, &audience); err != nil {
-            s.logger.Error("process audience failed",
-                zap.String("audience_id", string(audience.ID)),
-                zap.Error(err))
-            continue
-        }
-    }
-    return nil
+	for _, audience := range audiences {
+		filter, err := s.audienceRepo.GetFilterByAudienceId(ctx, audience.ID)
+		if err != nil {
+			s.logger.Error("get filter by audience id failed",
+				zap.String("audience_id", string(audience.ID)),
+				zap.Error(err))
+			continue
+		}
+		audience.Filter = domain.AudienceFilter{
+			CreationDateFrom:     filter.CreationDateFrom,
+			CreationDateTo:       filter.CreationDateTo,
+			StatusNames:          filter.StatusNames,
+			RegectionReasonNames: filter.RegectionReasonNames,
+			NonTargetReasonNames: filter.NonTargetReasonNames,
+		}
+		applications, err := s.audienceRepo.GetApplicationIdsByAdienceId(ctx, audience.ID)
+		if err != nil {
+			s.logger.Error("get applications by audience filter failed",
+				zap.String("audience_id", string(audience.ID)),
+				zap.Error(err))
+			continue	
+		}
+		
+		audience.Applications = applications
+		
+		if err := s.processAudience(ctx, &audience); err != nil {
+			s.logger.Error("process audience failed",
+				zap.String("audience_id", string(audience.ID)),
+				zap.Error(err))
+			continue
+		}
+	}
+	return nil
 }
 
 func (s *Service) processAudience(ctx context.Context, audience *domain.Audience) error {
-    requests, err := s.mysqlRepo.GetApplicationsByAudienceFilter(ctx, audience.Filter)
-    if err != nil {
-        return fmt.Errorf("get requests: %w", err)
-    }
+	// requests, err := s.mysqlRepo.GetNewApplicationsByAudience(ctx, audience)
+	// if err != nil {
+	// 	return fmt.Errorf("get requests: %w", err)
+	// }
 
-    if err := s.audienceRepo.UpdateApplication(ctx, audience.ID, requests); err != nil {
-        return fmt.Errorf("update requests: %w", err)
-    }
+	if err := s.audienceRepo.UpdateApplication(ctx, audience.ID, audience.Applications); err != nil {
+		return fmt.Errorf("update requests: %w", err)
+	}
 
-    // Prepare message for RabbitMQ
-    msg := domain.AudienceMessage{
-        AudienceID:    audience.ID,
-        UpdatedAt:     time.Now().UTC(),
-        RequestCount:  len(requests),
-        LastRequestID: requests[len(requests)-1].ID,
-    }
+	// Prepare message for RabbitMQ
+	msg := domain.AudienceMessage{
+		AudienceID:   audience.ID,
+		Applications: audience.Applications,
+		Filter:       audience.Filter,
+	}
 
-    // Serialize message
-    body, err := json.Marshal(msg)
-    if err != nil {
-        return fmt.Errorf("marshal message: %w", err)
-    }
+	// Serialize message
+	body, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("marshal message: %w", err)
+	}
 
-    // Publish to RabbitMQ
-    err = s.rabbitMQ.PublishWithContext(ctx,
-        exchangeName,
-        queueName,
-        false,
-        false,
-        amqp.Publishing{
-            ContentType: "application/json",
-            Body:       body,
-        })
-    if err != nil {
-        return fmt.Errorf("publish message: %w", err)
-    }
+	// Publish to RabbitMQ
+	err = s.rabbitMQ.PublishWithContext(ctx,
+		exchangeName,
+		queueName,
+		false,
+		false,
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        body,
+		})
+	if err != nil {
+		return fmt.Errorf("publish message: %w", err)
+	}
 
-    s.logger.Info("audience processed and message published",
-        zap.String("audience_id", string(audience.ID)),
-        zap.Int("request_count", len(requests)))
+	s.logger.Info("audience processed and message published",
+		zap.String("audience_id", string(audience.ID)),
+		zap.Int("request_count", len(audience.Applications)))
 
-    return nil
+	return nil
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"reporting-service/internal/domain"
+	helpers "reporting-service/internal/services/internal"
+
 	//"time"
 
 	"github.com/jmoiron/sqlx"
@@ -80,8 +82,8 @@ func (r *MySQLAudienceRepository) GetApplicationsByAudienceFilter(ctx context.Co
 			eb.manager_id,
 			eb.contacts_id,
 			eb.status,
-			ebrs.name,
-			ebrs.status_reason_id
+			COALESCE(ebrs.name, '') as name,
+			COALESCE(ebrs.status_reason_id, 0) as status_reason_id
         FROM estate_buys eb LEFT JOIN estate_statuses_reasons ebrs
         ON ebrs.status_reason_id=eb.status_reason_id
 		WHERE 1=1
@@ -98,16 +100,16 @@ func (r *MySQLAudienceRepository) GetApplicationsByAudienceFilter(ctx context.Co
 	}
 
 	// Add status filter
-	if len(filter.StatusIDs) > 0 {
-		query += " AND eb.status_id IN (:status_ids)"
-		args["status_ids"] = filter.StatusIDs
+	if len(filter.StatusNames) > 0 {
+		query += " AND eb.status_name IN (:status_names)"
+		args["status_names"] = filter.StatusNames
 	}
 
 	// Add reason filters
-	if len(filter.RejectionReasonIDs) > 0 || len(filter.NonTargetReasonIDs) > 0 {
-		reasons := append(filter.RejectionReasonIDs, filter.NonTargetReasonIDs...)
-		query += " AND ebrs.status_reason_id IN (:reason_ids)"
-		args["reason_ids"] = reasons
+	if len(filter.RegectionReasonNames) > 0 || len(filter.NonTargetReasonNames) > 0 {
+		reasons := append(filter.RegectionReasonNames, filter.NonTargetReasonNames...)
+		query += " AND ebrs.name IN (:reason_names)"
+		args["reason_names"] = reasons
 	}
 
 	// Execute query
@@ -133,19 +135,19 @@ func (r *MySQLAudienceRepository) GetApplicationsByAudienceFilter(ctx context.Co
 }
 
 func (r *MySQLAudienceRepository) GetNewApplicationsByAudience(ctx context.Context, audience *domain.Audience) ([]domain.Application, error) {
-	query := `
+		// Build query
+		query := `
         SELECT 
             eb.id,
             eb.date_added,
             eb.updated_at,
             eb.status_name,
-            eb.status_reason_id,
 			eb.manager_id,
 			eb.contacts_id,
-            ebrs.type,
-			ebrs.status_reason_id,
-			ebrs.name,
-        FROM estate_buys as eb LEFT JOIN estate_statuses_reasons as ebrs
+			eb.status,
+			COALESCE(ebrs.name, '') as name,
+			COALESCE(ebrs.status_reason_id, 0) as status_reason_id
+        FROM estate_buys eb LEFT JOIN estate_statuses_reasons ebrs
         ON ebrs.status_reason_id=eb.status_reason_id
 		WHERE 1=1
 		`
@@ -161,16 +163,16 @@ func (r *MySQLAudienceRepository) GetNewApplicationsByAudience(ctx context.Conte
 	}
 
 	// Add status filter
-	if len(audience.Filter.StatusIDs) > 0 {
-		query += " AND eb.status_id IN (:status_ids)"
-		args["statuse_ids"] = audience.Filter.StatusIDs
+	if len(audience.Filter.StatusNames) > 0 {
+		query += " AND eb.status_name IN (:status_names)"
+		args["status_names"] = audience.Filter.StatusNames
 	}
 
 	// Add reason filters
-	if len(audience.Filter.RejectionReasonIDs) > 0 || len(audience.Filter.NonTargetReasonIDs) > 0 {
-		reasons := append(audience.Filter.RejectionReasonIDs, audience.Filter.NonTargetReasonIDs...)
-		query += " AND ebrs.status_reason_id IN (:reason_ids)"
-		args["reason_ids"] = reasons
+	if len(audience.Filter.RegectionReasonNames) > 0 || len(audience.Filter.NonTargetReasonNames) > 0 {
+		reasons := append(audience.Filter.RegectionReasonNames, audience.Filter.NonTargetReasonNames...)
+		query += " AND ebrs.name IN (:reason_names)"
+		args["reason_names"] = reasons
 	}
 
 	// Get the latest creation date of all applications in the audience
@@ -184,6 +186,12 @@ func (r *MySQLAudienceRepository) GetNewApplicationsByAudience(ctx context.Conte
         if app.CreatedAt.After(latestDate) {
             latestDate = app.CreatedAt
         }
+		if 	!helpers.SliceConatinsString(audience.Filter.StatusNames, app.StatusName){
+			query :=`
+			DELETE FROM audience_requests
+			WHERE audience_id = :audience_id AND request_id = :request_id
+			`
+		}
     }
 
 	query += " AND eb.date_added >= :last_creation_date"
