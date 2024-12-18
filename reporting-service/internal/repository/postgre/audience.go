@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reporting-service/internal/domain"
-
+	"github.com/lib/pq"
 	//"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/zap"
@@ -41,14 +41,42 @@ func (r *PostgresAudienceRepository) Create(ctx context.Context, audience *domai
 	if err != nil {
 		return fmt.Errorf("insert audience: %w", err)
 	}
-
+	
+	query = `
+		INSERT INTO audience_filters (
+		audience_id,
+		creation_date_from,
+		creation_date_to,
+		status_names,
+		status_ids,
+		reason_ids,
+		rejection_reasons,
+		non_target_reasons
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING id
+	`
+	err = tx.QueryRowxContext(ctx, query,
+		audience.Filter.AudienceId,
+		audience.Filter.CreationDateFrom,
+		audience.Filter.CreationDateTo,
+		pq.Array(audience.Filter.StatusNames),
+		pq.Array(audience.Filter.StatusIDs),
+		pq.Array(audience.Filter.ReasonIDs),
+		pq.Array(audience.Filter.RegectionReasonNames),
+		pq.Array(audience.Filter.NonTargetReasonNames),
+	).Scan(&audience.Filter.ID)
+	if err != nil {
+		return fmt.Errorf("insert filter: %w", err)
+	}
+	
 	// Insert requests
 	for _, req := range audience.Applications {
 
 		query := `
             INSERT INTO audience_requests (
                 audience_id,
-                request_id,
+                request_id
             ) VALUES ($1, $2)`
 
 		_, err = tx.ExecContext(ctx, query,
@@ -294,7 +322,7 @@ func (r *PostgresAudienceRepository) RemoveAllIntegrations(ctx context.Context, 
 	return nil
 }
 
-func (r *PostgresAudienceRepository) GetApplicationIdsByAdienceId(ctx context.Context, audienceID int64) ([]domain.Application, error) {
+func (r *PostgresAudienceRepository) GetApplicationIdsByAdienceId(ctx context.Context, audienceID int64) ([]int64, error) {
 	var ids []int64
 
 	query := `
@@ -306,10 +334,18 @@ func (r *PostgresAudienceRepository) GetApplicationIdsByAdienceId(ctx context.Co
 	if err := r.db.SelectContext(ctx, &ids, query, audienceID); err != nil {
 		return nil, fmt.Errorf("select ids: %w", err)
 	}
+	return ids, nil
+}
 
-	var applications []domain.Application
-	for i := range ids {
-		 applications = append(applications, domain.Application{ID: ids[i]})
+func (r *PostgresAudienceRepository) DeleteApplications(ctx context.Context, audienceID int64, application_ids []int64) error {
+	query := `
+		DELETE FROM audience_requests 
+		WHERE audience_id = $1 AND request_id = ANY($2)`
+
+	_, err := r.db.ExecContext(ctx, query, audienceID, application_ids)
+	if err != nil {
+		return fmt.Errorf("execute delete applications: %w", err)
 	}
-	return applications, nil
+
+	return nil
 }

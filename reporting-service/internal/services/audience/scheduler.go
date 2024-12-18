@@ -104,9 +104,8 @@ func (s *AudienceUpdateService) processAudience(ctx context.Context, audience *d
     // Prepare message for RabbitMQ
     msg := domain.AudienceMessage{
         AudienceID:    audience.ID,
-        UpdatedAt:     time.Now().UTC(),
-        RequestCount:  len(requests),
-        LastRequestID: requests[len(requests)-1].ID,
+        Applications: requests,
+        Filter:       audience.Filter,
     }
 
     // Serialize message

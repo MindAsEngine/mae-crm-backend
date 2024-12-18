@@ -141,13 +141,13 @@ func (s *Service) DisconnectAll(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (s *Service) UpdateAudience(ctx context.Context, id int64) error {
+func (s *Service) UpdateAudience(ctx context.Context, id int64, application_ids []int64) error {
 	audience, err := s.audienceRepo.GetByID(ctx, id)
 	if err != nil {
 		return fmt.Errorf("get audience: %w", err)
 	}
 
-	requests, err := s.mysqlRepo.GetNewApplicationsByAudience(ctx, audience)
+	requests, err := s.mysqlRepo.GetNewApplicationsByAudience(ctx, audience, application_ids)
 	if err != nil {
 		return fmt.Errorf("get requests: %w", err)
 	}
@@ -180,17 +180,30 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 			RegectionReasonNames: filter.RegectionReasonNames,
 			NonTargetReasonNames: filter.NonTargetReasonNames,
 		}
-		applications, err := s.audienceRepo.GetApplicationIdsByAdienceId(ctx, audience.ID)
+		current_applications, err := s.audienceRepo.GetApplicationIdsByAdienceId(ctx, audience.ID)
 		if err != nil {
 			s.logger.Error("get applications by audience filter failed",
 				zap.String("audience_id", string(audience.ID)),
 				zap.Error(err))
 			continue	
 		}
-		
-		audience.Applications = applications
-		
-		if err := s.processAudience(ctx, &audience); err != nil {
+		changed_applications, err := s.mysqlRepo.GetChangedApplicationIds(ctx, &audience.Filter, current_applications)
+
+		if err != nil {
+			s.logger.Error("get changed applications failed",
+				zap.String("audience_id", string(audience.ID)),
+				zap.Error(err))
+			continue
+		}
+
+		if err := s.audienceRepo.DeleteApplications(ctx, audience.ID, changed_applications); err!=nil{
+			s.logger.Error("delete applications with changed statuses failed",
+				zap.String("audience_id", string(audience.ID)),
+				zap.Error(err))
+			continue
+		}
+
+		if err := s.processAudience(ctx, &audience, current_applications); err != nil {
 			s.logger.Error("process audience failed",
 				zap.String("audience_id", string(audience.ID)),
 				zap.Error(err))
@@ -200,13 +213,15 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 	return nil
 }
 
-func (s *Service) processAudience(ctx context.Context, audience *domain.Audience) error {
-	// requests, err := s.mysqlRepo.GetNewApplicationsByAudience(ctx, audience)
-	// if err != nil {
-	// 	return fmt.Errorf("get requests: %w", err)
-	// }
 
-	if err := s.audienceRepo.UpdateApplication(ctx, audience.ID, audience.Applications); err != nil {
+
+func (s *Service) processAudience(ctx context.Context, audience *domain.Audience, application_ids []int64) error {
+	requests, err := s.mysqlRepo.GetNewApplicationsByAudience(ctx, audience, application_ids)
+	if err != nil {
+		return fmt.Errorf("get requests: %w", err)
+	}
+
+	if err := s.audienceRepo.UpdateApplication(ctx, audience.ID, requests); err != nil {
 		return fmt.Errorf("update requests: %w", err)
 	}
 

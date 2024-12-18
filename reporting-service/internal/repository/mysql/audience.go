@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reporting-service/internal/domain"
-	helpers "reporting-service/internal/services/internal"
+	"reporting-service/internal/repository"
 
 	//"time"
 
@@ -134,7 +134,7 @@ func (r *MySQLAudienceRepository) GetApplicationsByAudienceFilter(ctx context.Co
 	return results, nil
 }
 
-func (r *MySQLAudienceRepository) GetNewApplicationsByAudience(ctx context.Context, audience *domain.Audience) ([]domain.Application, error) {
+func (r *MySQLAudienceRepository) GetNewApplicationsByAudience(ctx context.Context, audience *domain.Audience, apllication_ids []int64) ([]domain.Application, error) {
 		// Build query
 		query := `
         SELECT 
@@ -153,6 +153,9 @@ func (r *MySQLAudienceRepository) GetNewApplicationsByAudience(ctx context.Conte
 		`
 
 	args := map[string]interface{}{}
+
+	query += " AND eb.id NOT IN (:apllication_ids)"
+	args["apllication_ids"] = apllication_ids
 
 	// Add date filters
 	if audience.Filter.CreationDateFrom != nil && audience.Filter.CreationDateTo != nil{
@@ -186,11 +189,11 @@ func (r *MySQLAudienceRepository) GetNewApplicationsByAudience(ctx context.Conte
         if app.CreatedAt.After(latestDate) {
             latestDate = app.CreatedAt
         }
-		if 	!helpers.SliceConatinsString(audience.Filter.StatusNames, app.StatusName){
-			query :=`
-			DELETE FROM audience_requests
-			WHERE audience_id = :audience_id AND request_id = :request_id
-			`
+		if 	!repository.SliceConatinsString(audience.Filter.StatusNames, app.StatusName){
+			// query :=`
+			// DELETE FROM audience_requests
+			// WHERE audience_id = :audience_id AND request_id = :request_id
+			// `
 		}
     }
 
@@ -217,4 +220,43 @@ func (r *MySQLAudienceRepository) GetNewApplicationsByAudience(ctx context.Conte
 	}
 
 	return results, nil
+}
+
+func (r *MySQLAudienceRepository) GetChangedApplicationIds(ctx context.Context, filter *domain.AudienceFilter, application_ids []int64) ([]int64, error) {
+	// Build query
+	query := `
+		SELECT 
+			eb.id
+		FROM estate_buys eb LEFT JOIN estate_statuses_reasons ebrs
+		ON ebrs.status_reason_id=eb.status_reason_id
+		WHERE 1=1
+		`
+	
+	args := map[string]interface{}{}
+
+	query += " AND eb.id IN (:apllication_ids)"
+	args["apllication_ids"] = application_ids
+	query += " AND eb.status NOT IN (:status_names)"
+	args["status_names"] = filter.StatusNames
+
+	// Execute query
+	query, params, err := sqlx.Named(query, args)
+	if err != nil {
+		return nil, fmt.Errorf("failed to bind named params: %w", err)
+	}
+
+	query, params, err = sqlx.In(query, params...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to expand IN clause: %w", err)
+	}
+
+	query = r.db.Rebind(query)
+
+	var results []int64
+	err = r.db.SelectContext(ctx, &results, query, params...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err)
+	}
+	
+	return results, err
 }

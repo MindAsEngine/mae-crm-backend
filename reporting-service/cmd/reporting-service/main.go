@@ -139,43 +139,43 @@ func main() {
 		}
 	}()
 
-    // updateInterval := 24 * time.Hour
-    // startHour := 1
+    updateInterval := 24 * time.Hour
+    startHour := 1
 
-    // if cfg.Service.TestMode {
-    //     updateInterval = 1 * time.Minute  // Test every minute
-    //     startHour = time.Now().Hour()     // Start from current hour
-    // }
+    if cfg.Service.TestMode {
+        updateInterval = 1 * time.Minute  // Test every minute
+        startHour = time.Now().Hour()     // Start from current hour
+    }
 
-    // //Start daily update scheduler
-    // go func() {
-    //     now := time.Now()
-    //     nextRun := time.Date(now.Year(), now.Month(), now.Day(), startHour, 0, 0, 0, now.Location())
-    //     if now.After(nextRun) {
-    //         nextRun = nextRun.Add(updateInterval)
-    //     }
+    //Start daily update scheduler
+    go func() {
+        now := time.Now()
+        nextRun := time.Date(now.Year(), now.Month(), now.Day(), startHour, 0, 0, 0, now.Location())
+        if now.After(nextRun) {
+            nextRun = nextRun.Add(updateInterval)
+        }
 
-    //     timer := time.NewTimer(time.Until(nextRun))
-    //     defer timer.Stop()
+        timer := time.NewTimer(time.Until(nextRun))
+        defer timer.Stop()
 
-    //     ticker := time.NewTicker(updateInterval)
-    //     defer ticker.Stop()
+        ticker := time.NewTicker(updateInterval)
+        defer ticker.Stop()
 
-	// 	for {
-	// 		select {
-	// 		case <-timer.C:
-	// 			// First run
-	// 			if err := audienceService.ProcessAllAudiences(context.Background()); err != nil {
-	// 				logger.Error("Failed to process audiences", zap.Error(err))
-	// 			}
-	// 		case <-ticker.C:
-	// 			// Subsequent runs
-	// 			if err := audienceService.ProcessAllAudiences(context.Background()); err != nil {
-	// 				logger.Error("Failed to process audiences", zap.Error(err))
-	// 			}
-	// 		}
-	// 	}
-	// }()
+		for {
+			select {
+			case <-timer.C:
+				// First run
+				if err := audienceService.ProcessAllAudiences(context.Background()); err != nil {
+					logger.Error("Failed to process audiences", zap.Error(err))
+				}
+			case <-ticker.C:
+				// Subsequent runs
+				if err := audienceService.ProcessAllAudiences(context.Background()); err != nil {
+					logger.Error("Failed to process audiences", zap.Error(err))
+				}
+			}
+		}
+	}()
 
 	
 	// Graceful shutdown

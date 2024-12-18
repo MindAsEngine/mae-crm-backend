@@ -1,4 +1,4 @@
-package internal
+package repository
 
 func SliceConatinsString(slice []string, item string) bool {
 	for _, v := range slice {

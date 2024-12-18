@@ -13,14 +13,15 @@ type AudienceMessage struct {
 }
 
 type AudienceFilter struct {
-	CreationDateFrom     *time.Time `json:"creation_date_from"`
-	CreationDateTo       *time.Time `json:"creation_date_to"`
-	StatusNames          []string   `json:"statuses"`
-	StatusIDs            []int64    `json:"status_ids"`
-	RegectionReasonNames []string   `json:"rejection_reasons"`
-	NonTargetReasonNames []string   `json:"non_target_reasons"`
-	RejectionReasonIDs   []int64    `json:"rejection_reason_ids"`
-	NonTargetReasonIDs   []int64    `json:"non_target_reason_ids"`
+	ID 				 	 int64      `json:"id" db:"id"`
+	AudienceId		     int64      `json:"audience_id" db:"audience_id"`
+	CreationDateFrom     *time.Time `json:"creation_date_from" db:"creation_date_from"`
+	CreationDateTo       *time.Time `json:"creation_date_to" db:"creation_date_to"`
+	StatusNames          []string   `json:"statuses" db:"statuse_names"`
+	StatusIDs            []int64    `json:"status_ids" db:"status_ids"`
+	RegectionReasonNames []string   `json:"rejection_reasons" db:"rejection_reasons"`
+	NonTargetReasonNames []string   `json:"non_target_reasons" db:"non_target_reasons"`
+	ReasonIDs            []int64    `json:"reason_ids" db:"reason_ids"`
 }
 
 type AudienceCreateRequest struct {
