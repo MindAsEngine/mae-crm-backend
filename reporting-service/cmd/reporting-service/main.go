@@ -109,7 +109,7 @@ func main() {
 		UpdateTime: cfg.Service.UpdateTime,
 		BatchSize:  cfg.Service.BatchSize,
 		ExportPath: cfg.Service.ExportPath,
-	}, mysqlAudienceRepo, postgresAudienceRepo, logger)
+	}, mysqlAudienceRepo,postgresAudienceRepo,amqpChan,logger)
 
 	// Initialize HTTP handler
 	handler := api.NewHandler(audienceService, logger)
