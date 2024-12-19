@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reporting-service/internal/domain"
-	"reporting-service/internal/repository"
+	//"reporting-service/internal/repository"
 
 	//"time"
 
@@ -13,7 +13,7 @@ import (
 )
 
 type MySQLAudienceRepository struct {
-    db *sqlx.DB
+	db     *sqlx.DB
 	logger *zap.Logger
 }
 
@@ -23,12 +23,11 @@ type ValidationError struct {
 }
 
 func NewMySQLAudienceRepository(db *sqlx.DB) *MySQLAudienceRepository {
-    return &MySQLAudienceRepository{
-        db:     db,
-        logger: zap.L().With(zap.String("repository", "mysql_audience")),
-    }
+	return &MySQLAudienceRepository{
+		db:     db,
+		logger: zap.L().With(zap.String("repository", "mysql_audience")),
+	}
 }
-
 
 func validateAudienceFilter(filter domain.AudienceFilter) []ValidationError {
 	var errors []ValidationError
@@ -46,12 +45,12 @@ func validateAudienceFilter(filter domain.AudienceFilter) []ValidationError {
 				Field: "date_range",
 				Error: "date range must be less than 366 days (8784 hours)",
 			})
-			
+
 		}
 	}
 
 	// At least one filter must be specified
-	if (filter.CreationDateFrom == nil || filter.CreationDateTo == nil){
+	if filter.CreationDateFrom == nil || filter.CreationDateTo == nil {
 		errors = append(errors, ValidationError{
 			Field: "filter",
 			Error: "date range fields required",
@@ -92,7 +91,7 @@ func (r *MySQLAudienceRepository) GetApplicationsByAudienceFilter(ctx context.Co
 	args := map[string]interface{}{}
 
 	// Add date filters
-	if filter.CreationDateFrom != nil && filter.CreationDateTo != nil{
+	if filter.CreationDateFrom != nil && filter.CreationDateTo != nil {
 		query += " AND eb.date_added >= :creation_date_from"
 		args["creation_date_from"] = filter.CreationDateFrom
 		query += " AND eb.date_added <= :creation_date_to"
@@ -135,8 +134,8 @@ func (r *MySQLAudienceRepository) GetApplicationsByAudienceFilter(ctx context.Co
 }
 
 func (r *MySQLAudienceRepository) GetNewApplicationsByAudience(ctx context.Context, audience *domain.Audience, apllication_ids []int64) ([]domain.Application, error) {
-		// Build query
-		query := `
+	// Build query
+	query := `
         SELECT 
             eb.id,
             eb.date_added,
@@ -158,7 +157,7 @@ func (r *MySQLAudienceRepository) GetNewApplicationsByAudience(ctx context.Conte
 	args["apllication_ids"] = apllication_ids
 
 	// Add date filters
-	if audience.Filter.CreationDateFrom != nil && audience.Filter.CreationDateTo != nil{
+	if audience.Filter.CreationDateFrom != nil && audience.Filter.CreationDateTo != nil {
 		query += " AND eb.date_added >= :creation_date_from"
 		args["creation_date_from"] = audience.Filter.CreationDateFrom
 		query += " AND eb.date_added <= :creation_date_to"
@@ -183,22 +182,24 @@ func (r *MySQLAudienceRepository) GetNewApplicationsByAudience(ctx context.Conte
 		return nil, fmt.Errorf("audience has no applications")
 	}
 
-    latestDate := audience.Applications[0].CreatedAt
+	// Нахождение заявок которые появились после позднее последней заявки аудитории.(Не используется)
 
-    for _, app := range audience.Applications {
-        if app.CreatedAt.After(latestDate) {
-            latestDate = app.CreatedAt
-        }
-		if 	!repository.SliceConatinsString(audience.Filter.StatusNames, app.StatusName){
-			// query :=`
-			// DELETE FROM audience_requests
-			// WHERE audience_id = :audience_id AND request_id = :request_id
-			// `
-		}
-    }
+	// latestDate := audience.Applications[0].ID
 
-	query += " AND eb.date_added >= :last_creation_date"
-	args["last_creation_date"] = latestDate
+	// for  i, app := range audience.Applications {
+	//     if app.CreatedAt.After(latestDate) {
+	//         latestDate = app.ID
+	//     }
+	// 	if 	!repository.SliceConatinsString(audience.Filter.StatusNames, app.StatusName){
+	// 		// query :=`
+	// 		// DELETE FROM audience_requests
+	// 		// WHERE audience_id = :audience_id AND request_id = :request_id
+	// 		// `
+	// 	}
+	// }
+
+	// query += " AND eb.date_added >= :last_creation_date"
+	// args["last_creation_date"] = latestDate
 
 	// Execute query
 	query, params, err := sqlx.Named(query, args)
@@ -224,20 +225,22 @@ func (r *MySQLAudienceRepository) GetNewApplicationsByAudience(ctx context.Conte
 
 func (r *MySQLAudienceRepository) GetChangedApplicationIds(ctx context.Context, filter *domain.AudienceFilter, application_ids []int64) ([]int64, error) {
 	// Build query
+	args := map[string]interface{}{}
+
 	query := `
 		SELECT 
 			eb.id
 		FROM estate_buys eb LEFT JOIN estate_statuses_reasons ebrs
 		ON ebrs.status_reason_id=eb.status_reason_id
-		WHERE 1=1
+		WHERE eb.id IN (:apllication_ids) AND NOT eb.status_name IN (:status_names)
 		`
-	
-	args := map[string]interface{}{}
-
-	query += " AND eb.id IN (:apllication_ids)"
 	args["apllication_ids"] = application_ids
-	query += " AND eb.status NOT IN (:status_names)"
 	args["status_names"] = filter.StatusNames
+	r.logger.Info("args", zap.Any("statuses:", filter.StatusNames))
+
+	if application_ids == nil {
+		return nil, fmt.Errorf("application_ids is nil")
+	}
 
 	// Execute query
 	query, params, err := sqlx.Named(query, args)
@@ -257,6 +260,49 @@ func (r *MySQLAudienceRepository) GetChangedApplicationIds(ctx context.Context, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
-	
+
 	return results, err
+}
+
+func (r *MySQLAudienceRepository) ListApplicationsByIds(ctx context.Context, application_ids []int64) ([]domain.Application, error) {
+
+	r.logger.Info("application_id", zap.Any("application_ids", application_ids))
+	query := `
+		SELECT 
+            eb.id,
+            eb.date_added,
+            eb.updated_at,
+            eb.status_name,
+			eb.manager_id,
+			eb.contacts_id,
+			eb.status,
+			COALESCE(ebrs.name, '') as name,
+			COALESCE(ebrs.status_reason_id, 0) as status_reason_id
+        FROM estate_buys eb LEFT JOIN estate_statuses_reasons ebrs
+        ON ebrs.status_reason_id=eb.status_reason_id
+		WHERE id IN (:application_id)
+		`
+	args := map[string]interface{}{}
+	args["application_id"] = application_ids
+
+	query, params, err := sqlx.Named(query, args)
+	if err != nil {
+		return nil, fmt.Errorf("failed to bind named params: %w", err)
+	}
+
+	query, params, err = sqlx.In(query, params...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to expand IN clause: %w", err)
+	}
+
+	query = r.db.Rebind(query)
+
+	var results []domain.Application
+	err = r.db.SelectContext(ctx, &results, query, params...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err)
+	}
+
+	return results, nil
+
 }

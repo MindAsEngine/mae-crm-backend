@@ -17,7 +17,7 @@ type AudienceFilter struct {
 	AudienceId		     int64      `json:"audience_id" db:"audience_id"`
 	CreationDateFrom     *time.Time `json:"creation_date_from" db:"creation_date_from"`
 	CreationDateTo       *time.Time `json:"creation_date_to" db:"creation_date_to"`
-	StatusNames          []string   `json:"statuses" db:"statuse_names"`
+	StatusNames          []string   `json:"statuses" db:"status_names"`
 	StatusIDs            []int64    `json:"status_ids" db:"status_ids"`
 	RegectionReasonNames []string   `json:"rejection_reasons" db:"rejection_reasons"`
 	NonTargetReasonNames []string   `json:"non_target_reasons" db:"non_target_reasons"`

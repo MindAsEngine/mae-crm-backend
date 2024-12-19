@@ -3,8 +3,8 @@ package postgre
 import (
 	"context"
 	"fmt"
-	"reporting-service/internal/domain"
 	"github.com/lib/pq"
+	"reporting-service/internal/domain"
 	//"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/zap"
@@ -41,7 +41,7 @@ func (r *PostgresAudienceRepository) Create(ctx context.Context, audience *domai
 	if err != nil {
 		return fmt.Errorf("insert audience: %w", err)
 	}
-	
+
 	query = `
 		INSERT INTO audience_filters (
 		audience_id,
@@ -57,7 +57,7 @@ func (r *PostgresAudienceRepository) Create(ctx context.Context, audience *domai
 		RETURNING id
 	`
 	err = tx.QueryRowxContext(ctx, query,
-		audience.Filter.AudienceId,
+		audience.ID,
 		audience.Filter.CreationDateFrom,
 		audience.Filter.CreationDateTo,
 		pq.Array(audience.Filter.StatusNames),
@@ -69,7 +69,7 @@ func (r *PostgresAudienceRepository) Create(ctx context.Context, audience *domai
 	if err != nil {
 		return fmt.Errorf("insert filter: %w", err)
 	}
-	
+
 	// Insert requests
 	for _, req := range audience.Applications {
 
@@ -127,7 +127,6 @@ func (r *PostgresAudienceRepository) GetByID(ctx context.Context, id int64) (*do
 	return audience, nil
 }
 
-
 func (r *PostgresAudienceRepository) GetFilterByAudienceId(ctx context.Context, audience_id int64) (*domain.AudienceFilter, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -135,20 +134,54 @@ func (r *PostgresAudienceRepository) GetFilterByAudienceId(ctx context.Context, 
 	}
 	defer tx.Rollback()
 
-	filter := &domain.AudienceFilter{}
+	var filter domain.AudienceFilter
 
 	query := `
-	SELECT *
-	FROM audience_filters
-	WHERE audience_id = $1`
-	
-	if err := r.db.SelectContext(ctx, &filter, query, audience_id); err != nil {
-		return nil, fmt.Errorf("select filter: %w", err)
-	}
-	
-	return filter, err
-}
+    SELECT 
+        creation_date_from,
+        creation_date_to,
+        status_names,
+        rejection_reasons,
+        non_target_reasons
+    FROM audience_filters 
+    WHERE audience_id = $1`
 
+	rows := r.db.QueryRowContext(ctx, query, audience_id)
+	err = rows.Scan(
+		&filter.CreationDateFrom,
+		&filter.CreationDateTo,
+		pq.Array(&filter.StatusNames),
+		pq.Array(&filter.RegectionReasonNames),
+		pq.Array(&filter.NonTargetReasonNames),
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("scan filter: %w", err)
+	}
+
+	// query := `
+	// SELECT
+	//     id,
+	//     audience_id,
+	//     creation_date_from,
+	//     creation_date_to,
+	//     status_names::text[], -- явно указываем приведение типа
+	//     status_ids::integer[],  -- для массивов
+	//     rejection_reasons::text[],
+	//     non_target_reasons::text[],
+	//     reason_ids::integer[]
+	// FROM audience_filters
+	// WHERE audience_id = $1`
+
+	// Для отладки
+	// fmt.Printf("Executing query for audience_id: %d\n", audience_id)
+
+	// if err := r.db.GetContext(ctx, filter, query, audience_id); err != nil {
+	//     return nil, fmt.Errorf("get filter (audience_id=%d): %w", audience_id, err)
+	// }
+
+	return &filter, err
+}
 
 func (r *PostgresAudienceRepository) CreateIntegration(ctx context.Context, integration *domain.Integration, audience_id int64) error {
 	tx, err := r.db.BeginTxx(ctx, nil)
@@ -161,7 +194,7 @@ func (r *PostgresAudienceRepository) CreateIntegration(ctx context.Context, inte
 		SELECT id
 		FROM integrations
 		WHERE audience_id = $1 AND cabinet_name = $2`,
-		audience_id, integration.CabinetName,).Scan(&integration.ID)
+		audience_id, integration.CabinetName).Scan(&integration.ID)
 
 	if err == nil {
 		return fmt.Errorf("integration already exists")
@@ -245,7 +278,7 @@ func (r *PostgresAudienceRepository) List(ctx context.Context) ([]domain.Audienc
 	return audiences, nil
 }
 
-func (r *PostgresAudienceRepository) UpdateApplication(ctx context.Context, audienceID int64, requests []domain.Application) error {
+func (r *PostgresAudienceRepository) UpdateApplicationsForAudience(ctx context.Context, audienceID int64, requests []domain.Application) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
@@ -324,28 +357,31 @@ func (r *PostgresAudienceRepository) RemoveAllIntegrations(ctx context.Context, 
 
 func (r *PostgresAudienceRepository) GetApplicationIdsByAdienceId(ctx context.Context, audienceID int64) ([]int64, error) {
 	var ids []int64
-
+	r.logger.Info("audienceID", zap.Any("audienceID", audienceID))
 	query := `
 		SELECT 
-			request_id
+			request_id	
 		FROM audience_requests
 		WHERE audience_id = $1`
 
 	if err := r.db.SelectContext(ctx, &ids, query, audienceID); err != nil {
 		return nil, fmt.Errorf("select ids: %w", err)
 	}
+	r.logger.Info("ids", zap.Any("ids", ids))
 	return ids, nil
 }
 
 func (r *PostgresAudienceRepository) DeleteApplications(ctx context.Context, audienceID int64, application_ids []int64) error {
-	query := `
+
+	for _, app := range application_ids {
+		query := `
 		DELETE FROM audience_requests 
-		WHERE audience_id = $1 AND request_id = ANY($2)`
+		WHERE audience_id = $1 AND request_id = $2`
 
-	_, err := r.db.ExecContext(ctx, query, audienceID, application_ids)
-	if err != nil {
-		return fmt.Errorf("execute delete applications: %w", err)
+		_, err := r.db.ExecContext(ctx, query, audienceID, app)
+		if err != nil {
+			return fmt.Errorf("execute delete applications: %w", err)
+		}
 	}
-
 	return nil
 }
