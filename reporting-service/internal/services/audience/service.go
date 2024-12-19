@@ -267,7 +267,7 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 		}
 		s.logger.Info("current applications", zap.Any("current_applications", current_applications))
 
-		//Обновляем заявки в аудитории
+		//Получаем обновленные заявки которые ещё не в аудитории
 		requests, err := s.mysqlRepo.GetNewApplicationsByAudience(ctx, &audience, current_applications)
 		if err != nil {
 			s.logger.Error("get requests: ", zap.Error(err))
@@ -281,32 +281,37 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 			}
 		}
 
-		req_ids, err := s.audienceRepo.GetApplicationIdsByAdienceId(ctx, audience.ID)
+		//TODO: change on production
+		//if requests == nil && changed_applications == nil {
+		//	s.logger.Info("no changed or new requests found so nothing pushed to rabbit", zap.Any("audience_id", audience.ID))
+		//} else {
+			req_ids, err := s.audienceRepo.GetApplicationIdsByAdienceId(ctx, audience.ID)
 		
-		if err != nil {
-			s.logger.Error("get application ids by audience id: ", zap.Error(err))
-			continue
-		}
-		
-		if len(req_ids) == 0 {
-			s.logger.Info("no requests found", zap.Any("audience_id", audience.ID))
-			continue
-		}
-
-		requests, err = s.mysqlRepo.ListApplicationsByIds(ctx, req_ids)
-		if err != nil {
-			s.logger.Error("get audience: ", zap.Error(err))
-			continue
-		}
-
-		audience.Applications = requests
-
-		if err := s.pushAudienceToRabbit(ctx, &audience); err != nil {
-			s.logger.Error("process audience failed",
-				zap.String("audience_id", string(audience.ID)),
-				zap.Error(err))
-			continue
-		}
+			if err != nil {
+				s.logger.Error("get application ids by audience id: ", zap.Error(err))
+				continue
+			}
+			
+			if len(req_ids) == 0 {
+				s.logger.Info("no requests found", zap.Any("audience_id", audience.ID))
+				continue
+			}
+	
+			requests, err = s.mysqlRepo.ListApplicationsByIds(ctx, req_ids)
+			if err != nil {
+				s.logger.Error("get audience: ", zap.Error(err))
+				continue
+			}
+	
+			audience.Applications = requests
+	
+			if err := s.pushAudienceToRabbit(ctx, &audience); err != nil {
+				s.logger.Error("process audience failed",
+					zap.String("audience_id", string(audience.ID)),
+					zap.Error(err))
+				continue
+			}
+		//}
 	}
 	return nil
 }
