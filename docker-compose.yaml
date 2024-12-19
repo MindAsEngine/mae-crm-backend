@@ -80,6 +80,8 @@ services:
     container_name: reporting-service
     ports:
       - "8080:8080"
+    volumes:
+      - export_data:/app/export
     environment:
       - DATABASE_URL=postgresql://user:password@db:55432/reporting_db
     networks:
@@ -190,6 +192,12 @@ volumes:
   postgres_data:
   mysql_data:
   rabbitmq_data:
+  export_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./reporting-service/export
   # es_data:
   # redis_data:
 

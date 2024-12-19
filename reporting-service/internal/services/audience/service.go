@@ -41,7 +41,7 @@ func NewService(
 		amqpChan:     amqpChan,
 		logger:       logger,
 		config:       cfg,
-		exporter:     NewExcelExporter(*audienceRepo, logger),
+		exporter:     NewExcelExporter(*audienceRepo, *mysqlRepo, logger),
 	}
 
 	if err := s.setupRabbitMQ(); err != nil {
