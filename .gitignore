@@ -1,0 +1,4 @@
+consumer.rar
+ads-integration-service/.env
+ads-integration-service/docker-compose.yaml
+reporting-service/export/*

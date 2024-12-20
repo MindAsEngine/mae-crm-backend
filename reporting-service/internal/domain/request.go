@@ -7,9 +7,9 @@ import (
 )
 
 type AudienceMessage struct {
-	AudienceID    int64          `json:"audience_id"`
-	Applications  []Application  `json:"applications"`
-	Filter        AudienceFilter `json:"filter"`
+	AudienceID        int64    `json:"audience_id"`
+	Integration_names []string `json:"integrations"`
+	Application_ids   []int64  `json:"applications"`
 }
 
 type AudienceFilter struct {

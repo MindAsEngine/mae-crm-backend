@@ -1,14 +1,11 @@
-FROM golang:1.23-alpine
-
+# Базовый образ Python
+FROM python:3.10-slim
+# Устанавливаем рабочую директорию внутри контейнера
 WORKDIR /app
-
-COPY go.mod go.sum ./
-RUN go mod download
-
-COPY . .
-
-RUN go build -o ads-integration-service ./cmd/ads-integration-service
-
-EXPOSE 8081
-
-CMD ["./ads-integration-service"]
+# Копируем файлы в контейнер
+COPY requirements.txt ./
+COPY . ./
+# Установка зависимостей
+RUN pip install --no-cache-dir -r requirements.txt
+# Указываем команду для запуска приложения
+CMD ["python", "rabbit_integration.py"]

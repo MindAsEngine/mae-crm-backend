@@ -92,6 +92,17 @@ services:
       db:
         condition: service_healthy
 
+  ads-integration-service:
+    restart: unless-stopped
+    build:
+      context: ./ads-integration-service
+      dockerfile: Dockerfile
+    env_file: 
+      - .env
+    depends_on:
+      - rabbitmq
+    volumes:
+      - ads_integration_volume:/app
   # PostgreSQL
   db:
     image: postgres:15
@@ -192,6 +203,12 @@ volumes:
   postgres_data:
   mysql_data:
   rabbitmq_data:
+  ads_integration_volume:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./ads-integration-service/
   export_data:
     driver: local
     driver_opts:

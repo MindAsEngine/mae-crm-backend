@@ -297,14 +297,21 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 				continue
 			}
 	
-			requests, err = s.mysqlRepo.ListApplicationsByIds(ctx, req_ids)
-			if err != nil {
-				s.logger.Error("get audience: ", zap.Error(err))
+			// requests, err = s.mysqlRepo.ListApplicationsByIds(ctx, req_ids)
+			// if err != nil {
+			// 	s.logger.Error("get audience: ", zap.Error(err))
+			// 	continue
+			// }
+	
+			audience.Application_ids = req_ids
+
+			if integration_names, err := s.audienceRepo.GetIntegrationNamesByAudienceId(ctx, audience.ID); err!=nil {
+				s.logger.Error("get integration names by audience id: ", zap.Error(err))
 				continue
+			} else {
+				audience.IntegrationNames = integration_names
 			}
-	
-			audience.Applications = requests
-	
+
 			if err := s.pushAudienceToRabbit(ctx, &audience); err != nil {
 				s.logger.Error("process audience failed",
 					zap.String("audience_id", string(audience.ID)),
@@ -321,11 +328,11 @@ func (s *Service) pushAudienceToRabbit(ctx context.Context, audience *domain.Aud
 	if len(audience.Applications) > 0 {
 		lastRequestId = audience.Applications[len(audience.Applications)-1].ID
 	}
-
+	
 	message := domain.AudienceMessage{
 		AudienceID:   audience.ID,
-		Applications: audience.Applications,
-		Filter:       audience.Filter,
+		Integration_names: audience.IntegrationNames,
+		Application_ids: audience.Application_ids,
 	}
 
 	body, err := json.Marshal(message)

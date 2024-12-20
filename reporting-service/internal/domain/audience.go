@@ -34,13 +34,15 @@ type ApplicationFilter struct {
 }
 
 type Audience struct {
-	ID           int64          `json:"id" db:"id"`
-	Name         string         `json:"name" db:"name"`
-	CreatedAt    time.Time      `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at" db:"updated_at"`
-	Applications []Application  `json:"request_ids" db:"request_ids"`
-	Integrations []Integration  `json:"integrations" db:"integrations"`
-	Filter       AudienceFilter `json:"filter" db:"filter"`
+	ID               int64          `json:"id" db:"id"`
+	Name             string         `json:"name" db:"name"`
+	CreatedAt        time.Time      `json:"created_at" db:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at" db:"updated_at"`
+	Application_ids  []int64        `json:"request_ids" db:"request_ids"`
+	Applications     []Application  `json:"requests" db:"requests"`
+	Integrations     []Integration  `json:"integrations" db:"integrations"`
+	IntegrationNames []string       `json:"integration_names" db:"integration_names"`
+	Filter           AudienceFilter `json:"filter" db:"filter"`
 }
 
 type Integration struct {

@@ -22,6 +22,17 @@ func NewPostgresAudienceRepository(db *sqlx.DB) *PostgresAudienceRepository {
 	}
 }
 
+func (r *PostgresAudienceRepository) GetIntegrationNamesByAudienceId(ctx context.Context, audience_id int64) ([]string ,error) {
+	var integrations []string
+	query := `SELECT cabinet_name FROM integrations WHERE audience_id = $1`
+
+	if err := r.db.SelectContext(ctx, &integrations, query, audience_id); err != nil {
+		return nil, fmt.Errorf("select integrations: %w", err)
+	}
+
+	return integrations, nil
+}
+
 func (r *PostgresAudienceRepository) Create(ctx context.Context, audience *domain.Audience) error {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
