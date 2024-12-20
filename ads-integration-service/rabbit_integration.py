@@ -35,6 +35,8 @@ def process_message(ch, method, body):
 
         if "facebook" in integration_names:
             try:
+
+
                 facebook_id = ads_integrations.send_to_facebook_platform(audience_name, application_ids)
                 results["facebook"] = {
                     "status": "success",

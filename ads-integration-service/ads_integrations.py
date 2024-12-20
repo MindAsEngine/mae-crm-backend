@@ -15,7 +15,6 @@ class FacebookAdsIntegration:
     def __init__(self, access_token, app_id, app_secret):
         FacebookAdsApi.init(access_token=access_token, app_id=app_id, app_secret=app_secret)
 
-
     def get_audiences(self, account_id):
         try:
             account = AdAccount(f'act_{account_id}')
@@ -234,6 +233,7 @@ class YandexDirectIntegration:
             logger.error(f"Yandex Direct error: {str(e)}")
             raise
 
+
 # Update existing functions
 def send_to_facebook_platform(audience_name, application_ids):
     facebook_integration = FacebookAdsIntegration(
@@ -247,6 +247,7 @@ def send_to_facebook_platform(audience_name, application_ids):
         application_ids=application_ids
     )
 
+
 def send_to_google_platform(audience_name, application_ids):
     google_integration = GoogleAdsIntegration(
         client_id=os.getenv("GOOGLE_CLIENT_ID"),
@@ -259,6 +260,7 @@ def send_to_google_platform(audience_name, application_ids):
         audience_name=audience_name,
         application_ids=application_ids
     )
+
 
 def send_to_yandex_platform(audience_name, application_ids):
     yandex_integration = YandexDirectIntegration(
