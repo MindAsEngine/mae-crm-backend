@@ -8,8 +8,8 @@ import (
 
 type AudienceMessage struct {
 	AudienceID        int64    `json:"audience_id"`
-	Integration_names []string `json:"integrations"`
-	Application_ids   []int64  `json:"applications"`
+	Integration_names []string `json:"integration_names"`
+	Application_ids   []int64  `json:"application_ids"`
 }
 
 type AudienceFilter struct {

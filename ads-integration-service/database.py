@@ -3,6 +3,7 @@ from datetime import datetime
 import pandas as pd
 from tabulate import tabulate
 
+
 def connect_to_database():
     return mysql.connector.connect(
         host="localhost",
@@ -12,12 +13,13 @@ def connect_to_database():
         port=3306
     )
 
+
 def get_applications_by_id(application_ids):
     try:
         conn = connect_to_database()
         cursor = conn.cursor(dictionary=True)
         
-        query = """
+        query_parameterized = """
         SELECT 
             eb.id,
             eb.date_added,
@@ -55,6 +57,3 @@ def get_applications_by_id(application_ids):
     finally:
         if 'conn' in locals():
             conn.close()
-
-if __name__ == "__main__":
-    fetch_data()

@@ -92,17 +92,20 @@ services:
       db:
         condition: service_healthy
 
-  ads-integration-service:
-    restart: unless-stopped
-    build:
-      context: ./ads-integration-service
-      dockerfile: Dockerfile
-    env_file: 
-      - .env
-    depends_on:
-      - rabbitmq
-    volumes:
-      - ads_integration_volume:/app
+  # ads-integration-service:
+  #   restart: unless-stopped
+  #   build:
+  #     context: ./ads-integration-service
+  #     dockerfile: Dockerfile
+  #   env_file: 
+  #     - ./ads-integration-service/.env
+  #   volumes:
+  #     - ads_integration_volume:/app
+  #   depends_on:
+  #     mysql:
+  #       condition: service_healthy
+  #     db:
+  #       condition: service_healthy
   # PostgreSQL
   db:
     image: postgres:15

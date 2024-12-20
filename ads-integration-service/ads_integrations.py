@@ -1,13 +1,21 @@
+from facebook_business.adobjects.adaccount import AdAccount
 from facebook_business.api import FacebookAdsApi
 from facebook_business.adobjects.customaudience import CustomAudience
 from google.ads.googleads.client import GoogleAdsClient
 from google.ads.googleads.errors import GoogleAdsException
 import requests
+import os
+import logging
+import datetime
 import json
+
+logger = logging.getLogger()
 
 class FacebookAdsIntegration:
     def __init__(self, access_token, app_id, app_secret):
         FacebookAdsApi.init(access_token=access_token, app_id=app_id, app_secret=app_secret)
+
+
     def get_audiences(self, account_id):
         try:
             account = AdAccount(f'act_{account_id}')
@@ -33,16 +41,16 @@ class FacebookAdsIntegration:
             return True
         except Exception as e:
             logger.error(f"Facebook update audience error: {str(e)}")
-            raise    
+            raise
     def send_audience(self, account_id, audience_name, application_ids):
         try:
             audience = CustomAudience(parent_id=account_id)
             audience.update({
                 CustomAudience.Field.name: audience_name,
-                CustomAudience.Field.description: f'Created at {datetime.now()}'
+                CustomAudience.Field.description: f'Created at {datetime.datetime.now()}'
             })
             audience.create()
-            
+
             # Upload user data
             audience.add_users(schema=CustomAudience.Schema.phone_number, data=application_ids)
             return audience.get_id()
@@ -59,7 +67,7 @@ class GoogleAdsIntegration:
             'refresh_token': refresh_token,
             'use_proto_plus': True,
         })
-        
+
     def get_audiences(self, customer_id):
         try:
             ga_service = self.client.get_service('GoogleAdsService')
@@ -82,7 +90,7 @@ class GoogleAdsIntegration:
         try:
             audience_service = self.client.get_service("CustomerMatchUploadService")
             operations = []
-            
+
             for app_id in application_ids:
                 operation = self.client.get_type("CustomerMatchUploadOperation")
                 operation.create.user_data.phone_number = app_id
@@ -100,15 +108,15 @@ class GoogleAdsIntegration:
     def send_audience(self, customer_id, audience_name, application_ids):
         try:
             audience_service = self.client.get_service("CustomerMatchUploadService")
-            
+
             audience_operation = self.client.get_type("CustomerMatchUploadOperation")
             audience = audience_operation.create
             audience.audience_name = audience_name
-            
+
             for app_id in application_ids:
                 user_data = audience.user_data.add()
                 user_data.phone_number = app_id
-                
+
             response = audience_service.upload(
                 customer_id=customer_id,
                 operations=[audience_operation]
@@ -129,7 +137,7 @@ class YandexDirectIntegration:
                 "Authorization": f"Bearer {self.oauth_token}",
                 "Accept-Language": "ru"
             }
-            
+
             request_data = {
                 "method": "get",
                 "params": {
@@ -139,7 +147,7 @@ class YandexDirectIntegration:
                     "FieldNames": ["Id", "Name", "Size"]
                 }
             }
-            
+
             response = requests.post(
                 f"{self.api_url}audiences",
                 headers=headers,
@@ -158,7 +166,7 @@ class YandexDirectIntegration:
                 "Accept-Language": "ru",
                 "Content-Type": "application/json"
             }
-            
+
             upload_data = {
                 "method": "upload",
                 "params": {
@@ -166,7 +174,7 @@ class YandexDirectIntegration:
                     "Users": [{"Phone": str(id)} for id in application_ids]
                 }
             }
-            
+
             response = requests.post(
                 f"{self.api_url}audiences/upload",
                 headers=headers,
@@ -177,7 +185,7 @@ class YandexDirectIntegration:
         except requests.exceptions.RequestException as e:
             logger.error(f"Yandex Direct update error: {str(e)}")
             raise
-       
+
     def send_audience(self, client_id, audience_name, application_ids):
         try:
             headers = {
@@ -185,7 +193,7 @@ class YandexDirectIntegration:
                 "Accept-Language": "ru",
                 "Content-Type": "application/json"
             }
-            
+
             # Create audience
             audience_data = {
                 "method": "create",
@@ -193,11 +201,11 @@ class YandexDirectIntegration:
                     "Audiences": [{
                         "Name": audience_name,
                         "Type": "CUSTOMER_MATCH",
-                        "Description": f"Created at {datetime.now()}"
+                        "Description": f"Created at {datetime.datetime.now()}"
                     }]
                 }
             }
-            
+
             response = requests.post(
                 f"{self.api_url}audiences",
                 headers=headers,
@@ -205,7 +213,7 @@ class YandexDirectIntegration:
             )
             response.raise_for_status()
             audience_id = response.json()["result"]["AudienceId"]
-            
+
             # Upload users
             upload_data = {
                 "method": "upload",
@@ -214,7 +222,7 @@ class YandexDirectIntegration:
                     "Users": [{"Phone": str(id)} for id in application_ids]
                 }
             }
-            
+
             response = requests.post(
                 f"{self.api_url}audiences/upload",
                 headers=headers,
