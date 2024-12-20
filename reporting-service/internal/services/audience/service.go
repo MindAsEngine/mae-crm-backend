@@ -325,45 +325,55 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 }
 
 func (s *Service) pushAudienceToRabbit(ctx context.Context, audience *domain.Audience) error {
-	var lastRequestId int64
-	if len(audience.Applications) > 0 {
-		lastRequestId = audience.Applications[len(audience.Applications)-1].ID
+	chunks := splitIntoChunks(audience.Application_ids, 1000)
+
+	for _, chunk := range chunks {
+
+		message := domain.AudienceMessage{
+			AudienceID:        audience.ID,
+			Integration_names: audience.IntegrationNames,
+			Application_ids:   chunk,
+		}
+
+		body, err := json.Marshal(message)
+		if err != nil {
+			return fmt.Errorf("marshal message: %w", err)
+		}
+
+		err = s.amqpChan.PublishWithContext(
+			ctx,
+			"audiences",        // exchange
+			"audience.updates", // routing key
+			false,              // mandatory
+			false,              // immediate
+			amqp.Publishing{
+				ContentType:  "application/json",
+				Body:         body,
+				Timestamp:    time.Now(),
+				MessageId:    fmt.Sprintf("%d-%d", audience.ID, time.Now().Unix()),
+				DeliveryMode: amqp.Persistent,
+			},
+		)
+
+		if err != nil {
+			return fmt.Errorf("publish message: %w", err)
+		}
+
+		s.logger.Info("audience update message published",
+			zap.Int64("audience_id", audience.ID),
+			zap.Int("request_count", len(audience.Applications)))
 	}
-
-	message := domain.AudienceMessage{
-		AudienceID:        audience.ID,
-		Integration_names: audience.IntegrationNames,
-		Application_ids:   audience.Application_ids,
-	}
-
-	body, err := json.Marshal(message)
-	if err != nil {
-		return fmt.Errorf("marshal message: %w", err)
-	}
-
-	err = s.amqpChan.PublishWithContext(
-		ctx,
-		"audiences",        // exchange
-		"audience.updates", // routing key
-		false,              // mandatory
-		false,              // immediate
-		amqp.Publishing{
-			ContentType:  "application/json",
-			Body:         body,
-			Timestamp:    time.Now(),
-			MessageId:    fmt.Sprintf("%d-%d", audience.ID, time.Now().Unix()),
-			DeliveryMode: amqp.Persistent,
-		},
-	)
-
-	if err != nil {
-		return fmt.Errorf("publish message: %w", err)
-	}
-
-	s.logger.Info("audience update message published",
-		zap.Int64("audience_id", audience.ID),
-		zap.Int("request_count", len(audience.Applications)),
-		zap.Int64("last_request_id", lastRequestId))
-
 	return nil
+}
+
+func splitIntoChunks(ids []int64, chunkSize int) [][]int64 {
+	var chunks [][]int64
+	for i := 0; i < len(ids); i += chunkSize {
+		end := i + chunkSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+		chunks = append(chunks, ids[i:end])
+	}
+	return chunks
 }
