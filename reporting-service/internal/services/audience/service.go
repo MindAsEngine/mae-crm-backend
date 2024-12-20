@@ -34,7 +34,7 @@ func NewService(
 	mysqlRepo *MysqlRepo.MySQLAudienceRepository,
 	audienceRepo *PostgreRepo.PostgresAudienceRepository,
 	amqpChan *amqp.Channel,
-	logger *zap.Logger,) *Service {
+	logger *zap.Logger) *Service {
 	s := &Service{
 		audienceRepo: *audienceRepo,
 		mysqlRepo:    *mysqlRepo,
@@ -113,11 +113,12 @@ func (s *Service) List(ctx context.Context) ([]domain.AudienceResponse, error) {
 	var response []domain.AudienceResponse
 	for _, a := range audiences {
 		response = append(response, domain.AudienceResponse{
-			ID:           a.ID,
-			Name:         a.Name,
-			Integrations: a.Integrations,
-			CreatedAt:    a.CreatedAt,
-			UpdatedAt:    a.UpdatedAt,
+			ID:                 a.ID,
+			Name:               a.Name,
+			Integrations:       a.Integrations,
+			Applications_count: len(a.Application_ids),
+			CreatedAt:          a.CreatedAt,
+			UpdatedAt:          a.UpdatedAt,
 		})
 	}
 	return response, nil
@@ -285,39 +286,39 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 		//if requests == nil && changed_applications == nil {
 		//	s.logger.Info("no changed or new requests found so nothing pushed to rabbit", zap.Any("audience_id", audience.ID))
 		//} else {
-			req_ids, err := s.audienceRepo.GetApplicationIdsByAdienceId(ctx, audience.ID)
-		
-			if err != nil {
-				s.logger.Error("get application ids by audience id: ", zap.Error(err))
-				continue
-			}
-			
-			if len(req_ids) == 0 {
-				s.logger.Info("no requests found", zap.Any("audience_id", audience.ID))
-				continue
-			}
-	
-			// requests, err = s.mysqlRepo.ListApplicationsByIds(ctx, req_ids)
-			// if err != nil {
-			// 	s.logger.Error("get audience: ", zap.Error(err))
-			// 	continue
-			// }
-	
-			audience.Application_ids = req_ids
+		req_ids, err := s.audienceRepo.GetApplicationIdsByAdienceId(ctx, audience.ID)
 
-			if integration_names, err := s.audienceRepo.GetIntegrationNamesByAudienceId(ctx, audience.ID); err!=nil {
-				s.logger.Error("get integration names by audience id: ", zap.Error(err))
-				continue
-			} else {
-				audience.IntegrationNames = integration_names
-			}
+		if err != nil {
+			s.logger.Error("get application ids by audience id: ", zap.Error(err))
+			continue
+		}
 
-			if err := s.pushAudienceToRabbit(ctx, &audience); err != nil {
-				s.logger.Error("process audience failed",
-					zap.String("audience_id", string(audience.ID)),
-					zap.Error(err))
-				continue
-			}
+		if len(req_ids) == 0 {
+			s.logger.Info("no requests found", zap.Any("audience_id", audience.ID))
+			continue
+		}
+
+		// requests, err = s.mysqlRepo.ListApplicationsByIds(ctx, req_ids)
+		// if err != nil {
+		// 	s.logger.Error("get audience: ", zap.Error(err))
+		// 	continue
+		// }
+
+		audience.Application_ids = req_ids
+
+		if integration_names, err := s.audienceRepo.GetIntegrationNamesByAudienceId(ctx, audience.ID); err != nil {
+			s.logger.Error("get integration names by audience id: ", zap.Error(err))
+			continue
+		} else {
+			audience.IntegrationNames = integration_names
+		}
+
+		if err := s.pushAudienceToRabbit(ctx, &audience); err != nil {
+			s.logger.Error("process audience failed",
+				zap.String("audience_id", string(audience.ID)),
+				zap.Error(err))
+			continue
+		}
 		//}
 	}
 	return nil
@@ -328,11 +329,11 @@ func (s *Service) pushAudienceToRabbit(ctx context.Context, audience *domain.Aud
 	if len(audience.Applications) > 0 {
 		lastRequestId = audience.Applications[len(audience.Applications)-1].ID
 	}
-	
+
 	message := domain.AudienceMessage{
-		AudienceID:   audience.ID,
+		AudienceID:        audience.ID,
 		Integration_names: audience.IntegrationNames,
-		Application_ids: audience.Application_ids,
+		Application_ids:   audience.Application_ids,
 	}
 
 	body, err := json.Marshal(message)

@@ -265,7 +265,12 @@ func (r *PostgresAudienceRepository) List(ctx context.Context) ([]domain.Audienc
 		}
 
 		audiences[i].Applications = applications
+
+		for _, app := range audiences[i].Applications {
+			audiences[i].Application_ids = append(audiences[i].Application_ids, app.ID)
+		}
 	}
+
 
 	// Get integrations for each audience
 	for i := range audiences {

@@ -77,6 +77,10 @@ func (e *ExcelExporter) ExportAudience(ctx context.Context, audienceID int64) (s
 
     applications, err := e.mysqlRepo.ListApplicationsByIds(ctx, application_ids)
 
+    if applications == nil {
+        return "", fmt.Errorf("EXPORTER applications not found")
+    }
+
     if err != nil {
         return "", fmt.Errorf("EXPORTER get applications: %w", err)
     }
