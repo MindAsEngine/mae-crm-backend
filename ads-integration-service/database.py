@@ -1,18 +1,17 @@
 import mysql.connector
-from datetime import datetime
-import pandas as pd
-from tabulate import tabulate
+import os
+from dotenv import load_dotenv
 
 
 def connect_to_database():
+    load_dotenv()
     return mysql.connector.connect(
-        host="localhost",
-        user="user",
-        password="password",
-        database="macro_bi_cmp_528",
-        port=3306
+        host=os.getenv("MYSQL_HOST"),
+        user=os.getenv("MYSQL_USER"),
+        password=os.getenv("MYSQL_PASSWORD"),
+        database=os.getenv("MYSQL_DATABASE"),
+        port=os.getenv("MYSQL_PORT")
     )
-
 
 def get_applications_by_id(application_ids):
     try:
@@ -20,17 +19,13 @@ def get_applications_by_id(application_ids):
         cursor = conn.cursor(dictionary=True)
         
         query_parameterized = """
-        SELECT 
-            eb.id,
-            eb.date_added,
-            eb.date_modified,
-            eb.status_name,
-            eb.status_reason_id,
-            ebrs.name as reason_name
-        FROM estate_buys eb
-        LEFT JOIN estate_statuses_reasons ebrs 
-            ON ebrs.status_reason_id = eb.status_reason_id
-        WHERE eb.id IN (%s)
+        SELECT deals.contacts_buy_sex, deals.contacts_buy_dob, deals.contacts_buy_name, 
+        deals.contacts_buy_phones, deals.contacts_buy_emails, buys.contacts_buy_geo_country_name,
+        buys.contacts_buy_geo_city_name, buys.contacts_id
+        FROM macro_bi_cmp_528.estate_deals_contacts as deals 
+        inner join macro_bi_cmp_528.estate_buys as buys 
+        on buys.contacts_id = deals.id
+        WHERE buys.id IN (%s)
         """
         # Format as: (%s,%s,%s) for the number of ids
         in_format = ','.join(['%s'] * len(application_ids))
@@ -38,22 +33,13 @@ def get_applications_by_id(application_ids):
         
         cursor.execute(query_parameterized, tuple(application_ids))
         results = cursor.fetchall()
-        
-        # Convert to pandas DataFrame for better output
-        df = pd.DataFrame(results)
-        
-        # Format datetime columns
-        date_columns = ['date_added', 'date_modified']
-        for col in date_columns:
-            df[col] = df[col].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S'))
-            
-        print("\nQuery Results:")
-        print(tabulate(df, headers='keys', tablefmt='psql'))
-        
-        print(f"\nTotal rows: {len(results)}")
-        
+        print("Successfully fetched applications from database")
+        conn.close()
+        return results
     except mysql.connector.Error as err:
         print(f"Database error: {err}")
-    finally:
-        if 'conn' in locals():
-            conn.close()
+
+
+
+if __name__ == "__main__":
+    get_applications_by_id([4953867,4953925,4953927])
