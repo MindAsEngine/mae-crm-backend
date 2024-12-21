@@ -143,7 +143,7 @@ func main() {
     startHour := 1
 
     if cfg.Service.TestMode {
-        updateInterval = 1 * time.Minute  // Test every minute
+        updateInterval = 30 * time.Minute  // Test every minute
         startHour = time.Now().Hour()     // Start from current hour
     }
 

@@ -3,7 +3,10 @@ package mysql
 import (
 	"context"
 	"fmt"
+	"math"
 	"reporting-service/internal/domain"
+	"strings"
+
 	//"reporting-service/internal/repository"
 
 	//"time"
@@ -304,5 +307,127 @@ func (r *MySQLAudienceRepository) ListApplicationsByIds(ctx context.Context, app
 	}
 
 	return results, nil
+}
 
+func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Context, pagination *domain.PaginationRequest, filter *domain.ApplicationFilter) (*domain.PaginationResponse, error) {
+    // Build base query for counting
+    countQuery := `
+        SELECT COUNT(*) 
+        FROM estate_buys eb
+        LEFT JOIN estate_houses h ON h.id = eb.house_id
+        WHERE eb.company_id = 528
+    `
+
+    // Build where conditions and args map
+    whereConditions := []string{}
+    args := map[string]interface{}{}
+
+    if filter.Status != "" {
+        whereConditions = append(whereConditions, "eb.status_name = :status")
+        args["status"] = filter.Status
+    }
+
+    if filter.PropertyType != "" {
+        whereConditions = append(whereConditions, "eb.category = :property_type")
+        args["property_type"] = filter.PropertyType
+    }
+
+    if filter.ProjectName != "" {
+        whereConditions = append(whereConditions, "h.complex_name = :project_name")
+        args["project_name"] = "%" + filter.ProjectName + "%"
+    }
+
+    if filter.DaysInStatus > 0 {
+        whereConditions = append(whereConditions, `
+            DATEDIFF(NOW(), COALESCE(
+                (SELECT MAX(log_date) 
+                FROM estate_buys_statuses_log 
+                WHERE estate_buy_id = eb.id 
+                AND status_to = eb.status),
+                eb.date_added
+            )) >= :days_in_status
+        `)
+        args["days_in_status"] = filter.DaysInStatus
+    }
+
+    if len(whereConditions) > 0 {
+        countQuery += " AND " + strings.Join(whereConditions, " AND ")
+    }
+
+    // Get total count
+    var totalItems int64
+    countQuery, countArgs, err := sqlx.Named(countQuery, args)
+    if err != nil {
+        return nil, fmt.Errorf("prepare count query: %w", err)
+    }
+
+    countQuery = r.db.Rebind(countQuery)
+    if err := r.db.GetContext(ctx, &totalItems, countQuery, countArgs...); err != nil {
+        return nil, fmt.Errorf("count applications: %w", err)
+    }
+
+    // Prepare main query
+    query := `
+        SELECT 
+            eb.id AS id,
+            eb.date_added AS date_added,
+            COALESCE(edc.contacts_buy_name, 'Не указано') AS client_name,
+            eb.status_name AS status_name,
+            COALESCE(edc.contacts_buy_phones, 'Не указано') AS phone,
+            COALESCE(u.users_name, 'Не назначен') AS manager_name,
+            eb.category AS property_type,
+            DATEDIFF(NOW(), COALESCE(
+                (SELECT MAX(log_date) 
+                FROM estate_buys_statuses_log 
+                WHERE estate_buy_id = eb.id 
+                AND status_to = eb.status),
+                eb.date_added
+            )) AS days_in_status,
+            COALESCE(h.complex_name, 'Не указан') AS project_name
+        FROM estate_buys eb
+        LEFT JOIN estate_deals_contacts edc ON edc.id = eb.contacts_id
+        LEFT JOIN users u ON u.id = eb.manager_id
+        LEFT JOIN estate_houses h ON h.id = eb.house_id
+        WHERE eb.company_id = 528
+    `
+
+    if len(whereConditions) > 0 {
+        query += " AND " + strings.Join(whereConditions, " AND ")
+    }
+
+    // Add pagination
+    if pagination.PageSize <= 0 {
+        pagination.PageSize = 10
+    }
+    if pagination.Page <= 0 {
+        pagination.Page = 1
+    }
+    
+    offset := (pagination.Page - 1) * pagination.PageSize
+    
+    query += " ORDER BY eb.date_added DESC LIMIT :limit OFFSET :offset"
+    args["limit"] = pagination.PageSize
+    args["offset"] = offset
+
+    // Execute main query
+    query, queryArgs, err := sqlx.Named(query, args)
+    if err != nil {
+        return nil, fmt.Errorf("prepare main query: %w", err)
+    }
+
+    query = r.db.Rebind(query)
+    var items []domain.Application
+    if err := r.db.SelectContext(ctx, &items, query, queryArgs...); err != nil {
+        return nil, fmt.Errorf("select applications: %w", err)
+    }
+
+    totalPages := int(math.Ceil(float64(totalItems) / float64(pagination.PageSize)))
+
+    return &domain.PaginationResponse{
+        Items:      items,
+        TotalItems: totalItems,
+        TotalPages: totalPages,
+        Page:       pagination.Page,
+        PageSize:   pagination.PageSize,
+    }, nil
 }

@@ -42,12 +42,13 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
     api.HandleFunc("/audiences/{audienceId}", h.DeleteAudience).Methods(http.MethodDelete)
     api.HandleFunc("/audiences/{audienceId}/disconnect", h.DisconnectAudience).Methods(http.MethodDelete)
     api.HandleFunc("/audiences/{audienceId}/export", h.ExportAudience).Methods(http.MethodGet)
+    api.HandleFunc("/applications", h.ListApplications).Methods(http.MethodGet)
 }
 
 func (h *Handler) GetAudiences(w http.ResponseWriter, r *http.Request) {
     ctx := r.Context()
 
-    audiences, err := h.audienceService.List(ctx)
+    audiences, err := h.audienceService.AudienceList(ctx)
     if err != nil {
         h.errorResponse(w, "failed to get audiences: "+err.Error(), err, http.StatusInternalServerError)
         return
@@ -165,6 +166,54 @@ func (h *Handler) ExportAudience(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Disposition", "attachment; filename=audience_export.xlsx")
     http.ServeFile(w, r, filePath)
 }
+
+func (h *Handler) ListApplications(w http.ResponseWriter, r *http.Request) {
+    ctx := r.Context()
+    
+    page := r.URL.Query().Get("page")
+    pageSize := r.URL.Query().Get("page_size")
+    
+    pagination := &domain.PaginationRequest{}
+    
+    if page != "" {
+        pageNum, err := strconv.Atoi(page)
+        if err != nil || pageNum < 1 {
+            h.errorResponse(w, "invalid page number", err, http.StatusBadRequest)
+            return
+        }
+        pagination.Page = pageNum
+    }
+    
+    if pageSize != "" {
+        size, err := strconv.Atoi(pageSize)
+        if err != nil || size < 1 {
+            h.errorResponse(w, "invalid page size", err, http.StatusBadRequest)
+            return
+        }
+        pagination.PageSize = size
+    }
+
+    filter := &domain.ApplicationFilter{
+        Status:       r.URL.Query().Get("status"),
+        ProjectName:  r.URL.Query().Get("project_name"),
+        PropertyType: r.URL.Query().Get("property_type"),
+    }
+    
+    if daysInStatus := r.URL.Query().Get("days_in_status"); daysInStatus != "" {
+        if days, err := strconv.Atoi(daysInStatus); err == nil {
+            filter.DaysInStatus = days
+        }
+    }
+
+    response, err := h.audienceService.ListApplications(ctx, pagination, filter)
+    if err != nil {
+        h.errorResponse(w, "failed to get applications", err, http.StatusInternalServerError)
+        return
+    }
+
+    h.jsonResponse(w, response, http.StatusOK)
+}
+
 
 func (h *Handler) errorResponse(w http.ResponseWriter, message string, err error, code int) {
     h.logger.Error(message,

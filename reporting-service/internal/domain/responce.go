@@ -20,3 +20,11 @@ type ErrorResponse struct {
 	Error       string `json:"error"`
 	Description string `json:"description,omitempty"`
 }
+
+type PaginationResponse struct {
+    Items      interface{} `json:"items"`
+    TotalItems int64      `json:"total_items"`
+    TotalPages int        `json:"total_pages"`
+    Page       int        `json:"page"`
+    PageSize   int        `json:"page_size"`
+}

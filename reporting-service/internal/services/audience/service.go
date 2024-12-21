@@ -104,7 +104,7 @@ func (s *Service) GetById(ctx context.Context, id int64) (*domain.AudienceRespon
 	return &response, nil
 }
 
-func (s *Service) List(ctx context.Context) ([]domain.AudienceResponse, error) {
+func (s *Service) AudienceList(ctx context.Context) ([]domain.AudienceResponse, error) {
 	audiences, err := s.audienceRepo.List(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get audiences: %w", err)
@@ -202,6 +202,15 @@ func (s *Service) UpdateAudience(ctx context.Context, id int64, application_ids 
 
 	return nil
 }
+
+func (s *Service) ListApplications(ctx context.Context, pagination *domain.PaginationRequest, filter *domain.ApplicationFilter) (*domain.PaginationResponse, error) {
+    response, err := s.mysqlRepo.ListApplicationsWithFilters(ctx, pagination, filter)
+    if err != nil {
+        return nil, fmt.Errorf("get applications: %w", err)
+    }
+    return response, nil
+}
+
 
 func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 	audiences, err := s.audienceRepo.List(ctx)

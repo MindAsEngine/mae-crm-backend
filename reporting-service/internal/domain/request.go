@@ -33,3 +33,8 @@ type IntegrationsCreateRequest struct {
 	CabinetName string  `json:"cabinet_name"`
 	AudienceIds []int64 `json:"audience_ids"`
 }
+
+type PaginationRequest struct {
+    Page     int `json:"page" form:"page"`
+    PageSize int `json:"page_size" form:"page_size"`
+}
