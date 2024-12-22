@@ -1,4 +1,6 @@
 import datetime
+import threading
+from collections import defaultdict
 
 from database import get_applications_by_id
 import os
@@ -7,27 +9,55 @@ import ads_integrations
 import pika
 import json
 from dotenv import load_dotenv
-import csv
 
-
+message_storage = defaultdict(list)  # Ключ: audience_id, Значение: список сообщений
+message_lock = threading.Lock()  # Для потокобезопасности
 
 def callback(ch, method, properties, body):
     try:
+        result = None
         status_queue = os.getenv("RABBITMQ_STATUS_QUEUE")
-        result = process_message(ch, method, body)
-        ch.basic_publish(exchange='',
-                         routing_key=status_queue,
-                         properties=pika.BasicProperties(correlation_id=properties.correlation_id),
-                         body=json.dumps(result))
-        print(f"Сообщение обработано: {result}")
+        data = json.loads(body)
+        audience_id = data.get('audience_id')
+        current_chunk = data.get('current_chunk')
+        total_chunks = data.get('total_chunks')
+
+        if audience_id is None:
+            result = {"error": "No audience_id specified",
+                      "timestamp": datetime.datetime.now().isoformat()}
+        elif current_chunk is None or total_chunks is None:
+            result = {"error": "No chunk information specified",
+                      "timestamp": datetime.datetime.now().isoformat()}
+        else: # Если audience_id указан
+            with message_lock:
+                print("Положили на полочку сообщение для аудитории ", audience_id)
+                message_storage[audience_id].append(data)
+            if len(message_storage[audience_id]) >= total_chunks and current_chunk >= total_chunks:
+                print("Начало обработки сообщений для аудитории ", audience_id)
+                application_ids = []
+                for message in message_storage[audience_id]:
+                    application_ids.extend(message.get('application_ids', []))
+                processed_data = {
+                    "audience_id": audience_id,
+                    "audience_name": message_storage[audience_id][0].get('audience_name', f'Audience_{audience_id}'),
+                    "application_ids": list(set(application_ids)),
+                    "integrations": data.get('integrations', [])
+                }
+                result = process_message(processed_data)
+                message_storage.pop(audience_id)
+        if result:
+            ch.basic_publish(exchange='',
+                            routing_key=status_queue,
+                            properties=pika.BasicProperties(correlation_id=properties.correlation_id),
+                            body=json.dumps(result))
+            print(f"Сообщение обработано: {result}")
 
     except Exception as e:
         print(f"Ошибка обработки сообщения: {e}")
 
 
-def process_message(ch, method, body):
+def process_message(data):
     try:
-        data = json.loads(body)
         audience_id = data.get('audience_id')
         audience_name = data.get('audience_name', f'Audience_{audience_id}')
         application_ids = data.get('application_ids', [])

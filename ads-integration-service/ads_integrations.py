@@ -33,16 +33,22 @@ def prepare_facebook_user_data(application):
     city = application.get("contacts_buy_geo_city_name", "Ташкент")
     if city:
         user.update({"city": hash_data(city)})
-    name = application.get("contacts_buy_name", None)
-    if name:
-        words = name.split()
+
+    name_full = application.get("contacts_buy_name", None)
+    if name_full:
+        words = name_full.split()
         user.update({"first_name": hash_data(words[0])})
         if len(words) > 1:
             user.update({"last_name": hash_data(words[1])})
-
-    # todo dob = application.get("contacts_buy_dob", None)
-    # if dob:
-    #     user.update({"dob": hash_data(dob)})
+    name_first = application.get("name_first", None)
+    if name_first:
+        user.update({"first_name": hash_data(name_first)})
+    name_last = application.get("name_last", None)
+    if name_last:
+        user.update({"last_name": hash_data(name_last)})
+    dob = application.get("contacts_buy_dob", None)
+    if dob:
+        user.update({"dob": hash_data(dob.__str__())})
     return user
 
 def get_audiences(account_id):

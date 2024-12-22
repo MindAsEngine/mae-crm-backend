@@ -20,6 +20,7 @@ def get_applications_by_id(application_ids):
         
         query_parameterized = """
         SELECT deals.contacts_buy_sex, deals.contacts_buy_dob, deals.contacts_buy_name, 
+         deals.name_first, deals.name_last, deals.name_middle,
         deals.contacts_buy_phones, deals.contacts_buy_emails, buys.contacts_buy_geo_country_name,
         buys.contacts_buy_geo_city_name, buys.contacts_id
         FROM macro_bi_cmp_528.estate_deals_contacts as deals 
