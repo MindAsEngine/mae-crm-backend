@@ -1,13 +1,17 @@
+import csv
+
+from Tools.scripts.objgraph import externals
 from facebook_business.adobjects.adaccount import AdAccount
 from facebook_business.api import FacebookAdsApi
 from facebook_business.adobjects.customaudience import CustomAudience
-from google.ads.googleads.client import GoogleAdsClient
-from google.ads.googleads.errors import GoogleAdsException
+# from google.ads.googleads.client import GoogleAdsClient
+# from google.ads.googleads.errors import GoogleAdsException
 import requests
 import os
-import datetime
+
 
 import hashlib
+
 
 def hash_data(data):
     return hashlib.sha256(data.encode('utf-8')).hexdigest()
@@ -19,7 +23,7 @@ def prepare_facebook_user_data(application):
         user.update({"email": hash_data(email)})
     phone = application.get("contacts_buy_phones", None)
     if phone:
-        user.update({"phone": hash_data(phone)})
+        user.update({"phone": hash_data(phone.replace("+.", ""))})
     gender = application.get("contacts_buy_sex", None)
     if gender:
         user.update({"gender": hash_data(gender)})
@@ -30,15 +34,15 @@ def prepare_facebook_user_data(application):
     if city:
         user.update({"city": hash_data(city)})
     name = application.get("contacts_buy_name", None)
-    first_name = name.split()[0] if name else None
-    if first_name:
-        user.update({"first_name": hash_data(first_name)})
-    last_name = name.split()[1] if name else None
-    if last_name:
-        user.update({"last_name": hash_data(last_name)})
-    dob = application.get("contacts_buy_dob", None)
-    if dob:
-        user.update({"dob": hash_data(dob)})
+    if name:
+        words = name.split()
+        user.update({"first_name": hash_data(words[0])})
+        if len(words) > 1:
+            user.update({"last_name": hash_data(words[1])})
+
+    # todo dob = application.get("contacts_buy_dob", None)
+    # if dob:
+    #     user.update({"dob": hash_data(dob)})
     return user
 
 def get_audiences(account_id):
@@ -118,220 +122,208 @@ class GoogleAdsIntegration:
         self.client = client
         self.customer_id = customer_id
 
-    def create_audience(self, audience_name):
+    # def create_audience(self, audience_name):
+    #     try:
+    #         user_list_service = self.client.get_service("UserListService")
+    #         user_list_operation = self.client.get_type("UserListOperation")
+    #
+    #         user_list = user_list_operation.create
+    #         user_list.name = audience_name
+    #         user_list.description = "Customer Match audience created via API"
+    #         user_list.membership_life_span = 30
+    #
+    #         response = user_list_service.mutate_user_lists(
+    #             customer_id=self.customer_id,
+    #             operations=[user_list_operation]
+    #         )
+    #         audience_resource_name = response.results[0].resource_name
+    #         print(f"Создана аудитория: {audience_resource_name}")
+    #         return audience_resource_name
+    #     except GoogleAdsException as ex:
+    #         print(f"Ошибка создания аудитории Google Ads: {str(ex)}")
+    #         raise
+
+#     def update_audience(self, audience_resource_name, applications):
+#         try:
+#             offline_user_data_job_service = self.client.get_service("OfflineUserDataJobService")
+#             offline_user_data_job_operation = self.client.get_type("OfflineUserDataJobOperation")
+#             offline_user_data_job = offline_user_data_job_service.create_offline_user_data_job(
+#                 customer_id=self.customer_id,
+#                 job_type="CUSTOMER_MATCH_USER_LIST"
+#             )
+#             job_resource_name = offline_user_data_job.resource_name
+#             print(f"Создана Offline User Data Job: {job_resource_name}")
+#
+#             # Создание операций добавления данных
+#             operations = []
+#             for app in applications:
+#                 user_data = prepare_google_user_data(app)
+#                 user_data_operation = offline_user_data_job_operation.create
+#                 if "hashed_phone_number" in user_data:
+#                     self.client.get_type("UserIdentifier").hashed_phone_number = user_data["hashed_phone_number"]
+#                     user_data_operation.user_identifiers.append(
+#                     self.client.get_type("UserIdentifier").hashed_phone_number
+#                     )
+#                 operations.append(user_data_operation)
+#
+#             # Добавление пользователей в аудиторию
+#             offline_user_data_job_service.add_offline_user_data_job_operations(
+#                 resource_name=job_resource_name,
+#                 operations=operations
+#             )
+#             offline_user_data_job_service.run_offline_user_data_job(
+#                 resource_name=job_resource_name
+#             )
+#             print(f"Пользователи успешно добавлены в аудиторию: {audience_resource_name}")
+#             return True
+#         except Exception as ex:
+#             print(f"Ошибка обновления аудитории Google Ads: {str(ex)}")
+#             raise
+#
+#
+#     def send_audience(self, audience_name, applications):
+#         try:
+#             # Проверяем существование аудитории
+#             query = f"""
+#                 SELECT user_list.resource_name, user_list.name
+#                 FROM user_list
+#                 WHERE user_list.name = '{audience_name}'
+#             """
+#             response = self.client.get_service("GoogleAdsService").search_stream(
+#                 customer_id=self.customer_id, query=query
+#             )
+#             existing_audience = None
+#             for batch in response:
+#                 for row in batch.results:
+#                     existing_audience = row.user_list.resource_name
+#
+#             # Если аудитория уже существует, обновляем её
+#             if existing_audience:
+#                 return self.update_audience(existing_audience, applications)
+#
+#             # Создаём новую аудиторию
+#             audience_resource_name = self.create_audience(audience_name)
+#             self.update_audience(audience_resource_name, applications)
+#             return {"result": "success", "audience_id": audience_resource_name}
+#         except GoogleAdsException as ex:
+#             print(f"Ошибка Google Ads API: {str(ex)}")
+#             return {"result": "error", "message": str(ex)}
+# def send_to_google_platform(audience_name, application_ids):
+#     google_integration = GoogleAdsIntegration(
+#         client=GoogleAdsClient.load_from_storage("GOOGLE_ADS_YAML_PATH"),
+#         customer_id=os.getenv("GOOGLE_CUSTOMER_ID")
+#     )
+#     return google_integration.send_audience(audience_name, application_ids)
+
+def create_csv_file(applications):
+    results = []
+    for app in applications:
+        user_data = prepare_facebook_user_data(app)
+        results.append(user_data)
+    with open('audience.csv', 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(results[0].keys())
+        for result in results:
+            writer.writerow(result.values())
+        return file.name
+
+
+class YandexIntegration:
+    def __init__(self, oauth_token=None):
+        self.base_url = "https://api-audience.yandex.ru/v1/management/segment"
+        self.headers = {"Authorization": f"OAuth {oauth_token}"}
+
+    def get_audiences(self):
         try:
-            user_list_service = self.client.get_service("UserListService")
-            user_list_operation = self.client.get_type("UserListOperation")
-
-            user_list = user_list_operation.create
-            user_list.name = audience_name
-            user_list.description = "Customer Match audience created via API"
-            user_list.membership_life_span = 30
-
-            response = user_list_service.mutate_user_lists(
-                customer_id=self.customer_id,
-                operations=[user_list_operation]
+            response = requests.get(
+                url=self.base_url+'s',
+                headers=self.headers
             )
-            audience_resource_name = response.results[0].resource_name
-            print(f"Создана аудитория: {audience_resource_name}")
-            return audience_resource_name
-        except GoogleAdsException as ex:
-            print(f"Ошибка создания аудитории Google Ads: {str(ex)}")
-            raise
+            if response.status_code != 200:
 
-    def update_audience(self, audience_resource_name, applications):
-        try:
-            offline_user_data_job_service = self.client.get_service("OfflineUserDataJobService")
-            offline_user_data_job_operation = self.client.get_type("OfflineUserDataJobOperation")
-            offline_user_data_job = offline_user_data_job_service.create_offline_user_data_job(
-                customer_id=self.customer_id,
-                job_type="CUSTOMER_MATCH_USER_LIST"
-            )
-            job_resource_name = offline_user_data_job.resource_name
-            print(f"Создана Offline User Data Job: {job_resource_name}")
-
-            # Создание операций добавления данных
-            operations = []
-            for app in applications:
-                user_data = prepare_google_user_data(app)
-                user_data_operation = offline_user_data_job_operation.create
-                if "hashed_phone_number" in user_data:
-                    self.client.get_type("UserIdentifier").hashed_phone_number = user_data["hashed_phone_number"]
-                    user_data_operation.user_identifiers.append(
-                    self.client.get_type("UserIdentifier").hashed_phone_number
-                    )
-                operations.append(user_data_operation)
-
-            # Добавление пользователей в аудиторию
-            offline_user_data_job_service.add_offline_user_data_job_operations(
-                resource_name=job_resource_name,
-                operations=operations
-            )
-            offline_user_data_job_service.run_offline_user_data_job(
-                resource_name=job_resource_name
-            )
-            print(f"Пользователи успешно добавлены в аудиторию: {audience_resource_name}")
-            return True
+                raise Exception(f"Ошибка получения аудиторий Яндекс.Аудитории: {response.text}")
+            return response.json()
         except Exception as ex:
-            print(f"Ошибка обновления аудитории Google Ads: {str(ex)}")
+            print("Ошибка получения аудиторий Яндекс.Аудитории" + str(ex))
             raise
 
-
-    def send_audience(self, audience_name, applications):
+    def update_name(self, audience_id, name):
         try:
-            # Проверяем существование аудитории
-            query = f"""
-                SELECT user_list.resource_name, user_list.name
-                FROM user_list
-                WHERE user_list.name = '{audience_name}'
-            """
-            response = self.client.get_service("GoogleAdsService").search_stream(
-                customer_id=self.customer_id, query=query
+            response = requests.put(
+                url=self.base_url + f'/{audience_id}',
+                headers=self.headers,
+                json={"segment": {"name": name}}
             )
-            existing_audience = None
-            for batch in response:
-                for row in batch.results:
-                    existing_audience = row.user_list.resource_name
+            if response.status_code != 200:
+                raise Exception(f"Ошибка обновления имени аудитории Яндекс.Аудитории: {response.text}")
+            print(f"Имя аудитории успешно обновлено: {name}")
+            return name
+        except Exception as ex:
+            print("Ошибка обновления имени аудитории Яндекс.Аудитории" + str(ex))
+            raise Exception(f"Ошибка Яндекс.Аудитории: {str(ex)}")
 
-            # Если аудитория уже существует, обновляем её
-            if existing_audience:
-                return self.update_audience(existing_audience, applications)
 
-            # Создаём новую аудиторию
-            audience_resource_name = self.create_audience(audience_name)
-            self.update_audience(audience_resource_name, applications)
-            return {"result": "success", "audience_id": audience_resource_name}
-        except GoogleAdsException as ex:
-            print(f"Ошибка Google Ads API: {str(ex)}")
+
+    def upload_applications(self, applications, audience_id=None, audience_name=None):
+        try:
+            if not audience_id:
+                url = self.base_url + 's/upload_csv_file'
+            else:
+                url = self.base_url + f'/{audience_id}/modify_data'
+            csv_file = create_csv_file(applications)
+
+
+            response = requests.post(
+                url= url,
+                headers=self.headers,
+                files={"file": open(csv_file, "rb")}
+            )
+            if response.status_code != 200:
+                raise Exception(f"Ошибка загрузки данных в аудиторию Яндекс.Аудитории: {response.text}")
+            if audience_id:
+                print(f"Данные успешно загружены в аудиторию: {audience_id}")
+            else:
+                print(f"Данные успешно загружены в новую аудиторию")
+            json_response = response.json()
+            external_id = json_response["segment"]["id"]
+            status = json_response["segment"]["status"]
+            if not audience_id and audience_name:
+                name = self.update_name(external_id, audience_name)
+            else:
+                name = json_response["segment"]["name"]
+            return {
+                "result": "success",
+                "external_id": external_id,
+                "status": status,
+                "name": name
+            }
+        except Exception as ex:
+            print(ex)
+            raise Exception(f"Ошибка Яндекс.Аудитории: {str(ex)}")
+
+    def send_audience(self,  audience_name, application_ids, external_id=None):
+        try:
+            audiences = self.get_audiences()
+            if audiences:
+                segments = audiences.get("segments", [])
+                if external_id and external_id != -1:
+                    return self.upload_applications(application_ids, audience_id=external_id)
+                audience = next((aud for aud in segments if aud["name"] == audience_name), None)
+                if audience:
+                    return self.upload_applications(application_ids, audience_id=audience["id"])
+                return self.upload_applications(application_ids, audience_name=audience_name)
+        except Exception as ex:
+            print(ex)
             return {"result": "error", "message": str(ex)}
 
-# class YandexDirectIntegration:
-#     def __init__(self, oauth_token):
-#         self.oauth_token = oauth_token
-#         self.api_url = "https://api.direct.yandex.com/json/v5/"
-#
-#     def get_audiences(self):
-#         try:
-#             headers = {
-#                 "Authorization": f"Bearer {self.oauth_token}",
-#                 "Accept-Language": "ru"
-#             }
-#
-#             request_data = {
-#                 "method": "get",
-#                 "params": {
-#                     "SelectionCriteria": {
-#                         "Types": ["CUSTOMER_MATCH"]
-#                     },
-#                     "FieldNames": ["Id", "Name", "Size"]
-#                 }
-#             }
-#
-#             response = requests.post(
-#                 f"{self.api_url}audiences",
-#                 headers=headers,
-#                 json=request_data
-#             )
-#             response.raise_for_status()
-#             return response.json()["result"]["Audiences"]
-#         except requests.exceptions.RequestException as e:
-#             logger.error(f"Yandex Direct get audiences error: {str(e)}")
-#             raise
-#
-#     def update_audience(self, audience_id, application_ids):
-#         try:
-#             headers = {
-#                 "Authorization": f"Bearer {self.oauth_token}",
-#                 "Accept-Language": "ru",
-#                 "Content-Type": "application/json"
-#             }
-#
-#             upload_data = {
-#                 "method": "upload",
-#                 "params": {
-#                     "AudienceId": audience_id,
-#                     "Users": [{"Phone": str(id)} for id in application_ids]
-#                 }
-#             }
-#
-#             response = requests.post(
-#                 f"{self.api_url}audiences/upload",
-#                 headers=headers,
-#                 json=upload_data
-#             )
-#             response.raise_for_status()
-#             return True
-#         except requests.exceptions.RequestException as e:
-#             logger.error(f"Yandex Direct update error: {str(e)}")
-#             raise
-#
-#     def send_audience(self, audience_name, application_ids):
-#         try:
-#             headers = {
-#                 "Authorization": f"Bearer {self.oauth_token}",
-#                 "Accept-Language": "ru",
-#                 "Content-Type": "application/json"
-#             }
-#
-#             # Create audience
-#             audience_data = {
-#                 "method": "create",
-#                 "params": {
-#                     "Audiences": [{
-#                         "Name": audience_name,
-#                         "Type": "CUSTOMER_MATCH",
-#                         "Description": f"Created at {datetime.datetime.now()}"
-#                     }]
-#                 }
-#             }
-#
-#             response = requests.post(
-#                 f"{self.api_url}audiences",
-#                 headers=headers,
-#                 json=audience_data
-#             )
-#             response.raise_for_status()
-#             audience_id = response.json()["result"]["AudienceId"]
-#
-#             # Upload users
-#             upload_data = {
-#                 "method": "upload",
-#                 "params": {
-#                     "AudienceId": audience_id,
-#                     "Users": [{"Phone": str(id)} for id in application_ids]
-#                 }
-#             }
-#
-#             response = requests.post(
-#                 f"{self.api_url}audiences/upload",
-#                 headers=headers,
-#                 json=upload_data
-#             )
-#             response.raise_for_status()
-#             return audience_id
-#         except requests.exceptions.RequestException as e:
-#             logger.error(f"Yandex Direct error: {str(e)}")
-#             raise
-#
-
-# Update existing functions
 
 
-
-def send_to_google_platform(audience_name, application_ids):
-    google_integration = GoogleAdsIntegration(
-        client=GoogleAdsClient.load_from_storage("GOOGLE_ADS_YAML_PATH"),
-        customer_id=os.getenv("GOOGLE_CUSTOMER_ID")
+def send_to_yandex_platform(audience_name, application_ids, external_id=None):
+    yandex_integration = YandexIntegration(
+        oauth_token=os.getenv("YANDEX_OAUTH_TOKEN")
     )
-    return google_integration.send_audience(audience_name, application_ids)
-
-#
-# def send_to_yandex_platform(audience_name, application_ids):
-#     yandex_integration = YandexDirectIntegration(
-#         oauth_token=os.getenv("YANDEX_OAUTH_TOKEN")
-#     )
-#     return yandex_integration.send_audience(
-#         client_id=os.getenv("YANDEX_CLIENT_ID"),
-#         audience_name=audience_name,
-#         application_ids=application_ids
-#     )
+    return yandex_integration.send_audience(
+        audience_name=audience_name,
+        application_ids=application_ids,
+        external_id=external_id
+    )
