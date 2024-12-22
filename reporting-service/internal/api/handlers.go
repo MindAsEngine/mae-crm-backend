@@ -15,222 +15,258 @@ import (
 )
 
 type Response struct {
-    Error   string      `json:"error,omitempty"`
-    Data    interface{} `json:"data,omitempty"`
+	Error string      `json:"error,omitempty"`
+	Data  interface{} `json:"data,omitempty"`
 }
 
 type Handler struct {
-    audienceService *audience.Service
-    logger         *zap.Logger
+	audienceService *audience.Service
+	logger          *zap.Logger
 }
 
 func NewHandler(audienceService *audience.Service, logger *zap.Logger) *Handler {
-    return &Handler{
-        audienceService: audienceService,
-        logger:         logger,
-    }
+	return &Handler{
+		audienceService: audienceService,
+		logger:          logger,
+	}
 }
 
 func (h *Handler) RegisterRoutes(r *mux.Router) {
-    api := r.PathPrefix("/api").Subrouter()
-    
-    // Audiences endpoints
-    api.HandleFunc("/audiences", h.GetAudiences).Methods(http.MethodGet)
-    api.HandleFunc("/audiences", h.CreateAudience).Methods(http.MethodPost)
-    api.HandleFunc("/audiences/integrations", h.CreateIntegrations).Methods(http.MethodPost)
-    api.HandleFunc("/audiences/{audienceId}", h.GetAudience).Methods(http.MethodGet)
-    api.HandleFunc("/audiences/{audienceId}", h.DeleteAudience).Methods(http.MethodDelete)
-    api.HandleFunc("/audiences/{audienceId}/disconnect", h.DisconnectAudience).Methods(http.MethodDelete)
-    api.HandleFunc("/audiences/{audienceId}/export", h.ExportAudience).Methods(http.MethodGet)
-    api.HandleFunc("/applications", h.ListApplications).Methods(http.MethodGet)
+	api := r.PathPrefix("/api").Subrouter()
+
+	// Audiences endpoints
+	api.HandleFunc("/audiences", h.GetAudiences).Methods(http.MethodGet)
+	api.HandleFunc("/audiences", h.CreateAudience).Methods(http.MethodPost)
+	api.HandleFunc("/audiences/integrations", h.CreateIntegrations).Methods(http.MethodPost)
+	api.HandleFunc("/audiences/{audienceId}", h.GetAudience).Methods(http.MethodGet)
+	api.HandleFunc("/audiences/{audienceId}", h.DeleteAudience).Methods(http.MethodDelete)
+	api.HandleFunc("/audiences/{audienceId}/disconnect", h.DisconnectAudience).Methods(http.MethodDelete)
+	api.HandleFunc("/audiences/{audienceId}/export", h.ExportAudience).Methods(http.MethodGet)
+	api.HandleFunc("/applications", h.ListApplications).Methods(http.MethodGet)
+    api.HandleFunc("/applications/export", h.ExportApplications).Methods(http.MethodGet)
 }
 
 func (h *Handler) GetAudiences(w http.ResponseWriter, r *http.Request) {
-    ctx := r.Context()
+	ctx := r.Context()
 
-    audiences, err := h.audienceService.AudienceList(ctx)
-    if err != nil {
-        h.errorResponse(w, "failed to get audiences: "+err.Error(), err, http.StatusInternalServerError)
-        return
-    }
+	audiences, err := h.audienceService.AudienceList(ctx)
+	if err != nil {
+		h.errorResponse(w, "failed to get audiences: "+err.Error(), err, http.StatusInternalServerError)
+		return
+	}
 
-    h.jsonResponse(w, audiences, http.StatusOK)
+	h.jsonResponse(w, audiences, http.StatusOK)
 }
 
 func (h *Handler) GetAudience(w http.ResponseWriter, r *http.Request) {
-    ctx := r.Context()
-    vars := mux.Vars(r)
+	ctx := r.Context()
+	vars := mux.Vars(r)
 
-    audienceID, err := strconv.ParseInt(vars["audienceId"], 10, 64)
-    if err != nil {
-        h.errorResponse(w, "invalid audience id: "+err.Error(), err, http.StatusBadRequest)
-        return
-    }
-    audiences, err := h.audienceService.GetById(ctx, audienceID)
-    if err != nil {
-        h.errorResponse(w, "failed to get audience by id: "+err.Error(), err, http.StatusInternalServerError)
-        return
-    }
+	audienceID, err := strconv.ParseInt(vars["audienceId"], 10, 64)
+	if err != nil {
+		h.errorResponse(w, "invalid audience id: "+err.Error(), err, http.StatusBadRequest)
+		return
+	}
+	audiences, err := h.audienceService.GetById(ctx, audienceID)
+	if err != nil {
+		h.errorResponse(w, "failed to get audience by id: "+err.Error(), err, http.StatusInternalServerError)
+		return
+	}
 
-    h.jsonResponse(w, audiences, http.StatusOK)
+	h.jsonResponse(w, audiences, http.StatusOK)
 }
 
 func (h *Handler) CreateIntegrations(w http.ResponseWriter, r *http.Request) {
-    ctx := r.Context()
+	ctx := r.Context()
 
-    var req domain.IntegrationsCreateRequest
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var req domain.IntegrationsCreateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.errorResponse(w, "invalid request body: "+err.Error(), err, http.StatusBadRequest)
-        return
-    }
+		return
+	}
 
-    integrations, err := h.audienceService.CreateIntegrations(ctx, req)
-    if err != nil {
-        h.errorResponse(w, "failed to create integration: "+err.Error(), err, http.StatusInternalServerError)
-        return
-    }
-    h.jsonResponse(w, integrations, http.StatusCreated)
+	integrations, err := h.audienceService.CreateIntegrations(ctx, req)
+	if err != nil {
+		h.errorResponse(w, "failed to create integration: "+err.Error(), err, http.StatusInternalServerError)
+		return
+	}
+	h.jsonResponse(w, integrations, http.StatusCreated)
 }
 
 func (h *Handler) CreateAudience(w http.ResponseWriter, r *http.Request) {
-    ctx := r.Context()
+	ctx := r.Context()
 
-    var req domain.AudienceCreateRequest
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var req domain.AudienceCreateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.errorResponse(w, "invalid request body: "+err.Error(), err, http.StatusBadRequest)
-        return
-    }
+		return
+	}
 
-    audience, err := h.audienceService.Create(ctx, req)
-    if err != nil {
-        h.errorResponse(w, "failed to create audience: "+err.Error(), err, http.StatusInternalServerError)
-        return
-    }
+	audience, err := h.audienceService.Create(ctx, req)
+	if err != nil {
+		h.errorResponse(w, "failed to create audience: "+err.Error(), err, http.StatusInternalServerError)
+		return
+	}
 
-    h.jsonResponse(w, audience, http.StatusCreated)
+	h.jsonResponse(w, audience, http.StatusCreated)
 }
 
 func (h *Handler) DeleteAudience(w http.ResponseWriter, r *http.Request) {
-    ctx := r.Context()
-    vars := mux.Vars(r)
-    
-    audienceID, err := strconv.ParseInt(vars["audienceId"], 10, 64)
-    if err != nil {
-        h.errorResponse(w, "invalid audience id: "+err.Error(), err, http.StatusBadRequest)
-        return
-    }
+	ctx := r.Context()
+	vars := mux.Vars(r)
 
-    if err := h.audienceService.Delete(ctx, audienceID); err != nil {
+	audienceID, err := strconv.ParseInt(vars["audienceId"], 10, 64)
+	if err != nil {
+		h.errorResponse(w, "invalid audience id: "+err.Error(), err, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.audienceService.Delete(ctx, audienceID); err != nil {
 		h.errorResponse(w, "failed to delete audience: "+err.Error(), err, http.StatusInternalServerError)
-        return
-    }
+		return
+	}
 
-    h.jsonResponse(w, map[string]string{"status": "success"}, http.StatusOK)
+	h.jsonResponse(w, map[string]string{"status": "success"}, http.StatusOK)
 }
 
 func (h *Handler) DisconnectAudience(w http.ResponseWriter, r *http.Request) {
-    ctx := r.Context()
-    vars := mux.Vars(r)
-    
-    audienceID, err := strconv.ParseInt(vars["audienceId"], 10, 64)
-    if err != nil {
-        h.errorResponse(w, "invalid audience id: "+err.Error(), err, http.StatusBadRequest)
-        return
-    }
+	ctx := r.Context()
+	vars := mux.Vars(r)
 
-    if err := h.audienceService.DisconnectAll(ctx, audienceID); err != nil {
+	audienceID, err := strconv.ParseInt(vars["audienceId"], 10, 64)
+	if err != nil {
+		h.errorResponse(w, "invalid audience id: "+err.Error(), err, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.audienceService.DisconnectAll(ctx, audienceID); err != nil {
 		h.errorResponse(w, "failed to disconnect audience: "+err.Error(), err, http.StatusInternalServerError)
-        return
-    }
+		return
+	}
 
-    h.jsonResponse(w, map[string]string{"status": "success"}, http.StatusOK)
+	h.jsonResponse(w, map[string]string{"status": "success"}, http.StatusOK)
 }
 
 func (h *Handler) ExportAudience(w http.ResponseWriter, r *http.Request) {
-    ctx := r.Context()
-    vars := mux.Vars(r)
-    
-    audienceID, err := strconv.ParseInt(vars["audienceId"], 10, 64)
-    if err != nil {
-        h.errorResponse(w, "invalid audience id: "+err.Error(), err, http.StatusBadRequest)
-        return
-    }
+	ctx := r.Context()
+	vars := mux.Vars(r)
 
-    filePath, err := h.audienceService.Export(ctx, audienceID)
-    if err != nil {
+	audienceID, err := strconv.ParseInt(vars["audienceId"], 10, 64)
+	if err != nil {
+		h.errorResponse(w, "invalid audience id: "+err.Error(), err, http.StatusBadRequest)
+		return
+	}
+
+	filePath, fileName, err := h.audienceService.ExportAudience(ctx, audienceID)
+	if err != nil {
 		h.errorResponse(w, "failed to export audience: "+err.Error(), err, http.StatusInternalServerError)
-        return
-    }
+		return
+	}
 
-    w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    w.Header().Set("Content-Disposition", "attachment; filename=audience_export.xlsx")
-    http.ServeFile(w, r, filePath)
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
+	http.ServeFile(w, r, filePath)
 }
 
 func (h *Handler) ListApplications(w http.ResponseWriter, r *http.Request) {
-    ctx := r.Context()
-    
-    page := r.URL.Query().Get("page")
-    pageSize := r.URL.Query().Get("page_size")
-    
-    pagination := &domain.PaginationRequest{}
-    
-    if page != "" {
-        pageNum, err := strconv.Atoi(page)
-        if err != nil || pageNum < 1 {
-            h.errorResponse(w, "invalid page number", err, http.StatusBadRequest)
-            return
-        }
-        pagination.Page = pageNum
-    }
-    
-    if pageSize != "" {
-        size, err := strconv.Atoi(pageSize)
-        if err != nil || size < 1 {
-            h.errorResponse(w, "invalid page size", err, http.StatusBadRequest)
-            return
-        }
-        pagination.PageSize = size
-    }
+	ctx := r.Context()
 
-    filter := &domain.ApplicationFilter{
-        Status:       r.URL.Query().Get("status"),
-        ProjectName:  r.URL.Query().Get("project_name"),
-        PropertyType: r.URL.Query().Get("property_type"),
-    }
-    
-    if daysInStatus := r.URL.Query().Get("days_in_status"); daysInStatus != "" {
-        if days, err := strconv.Atoi(daysInStatus); err == nil {
-            filter.DaysInStatus = days
-        }
-    }
+	page := r.URL.Query().Get("page")
+	pageSize := r.URL.Query().Get("page_size")
 
-    response, err := h.audienceService.ListApplications(ctx, pagination, filter)
-    if err != nil {
-        h.errorResponse(w, "failed to get applications", err, http.StatusInternalServerError)
-        return
-    }
+	pagination := &domain.PaginationRequest{}
 
-    h.jsonResponse(w, response, http.StatusOK)
+	if page != "" {
+		pageNum, err := strconv.Atoi(page)
+		if err != nil || pageNum < 1 {
+			h.errorResponse(w, "invalid page number", err, http.StatusBadRequest)
+			return
+		}
+		pagination.Page = pageNum
+	}
+
+	if pageSize != "" {
+		size, err := strconv.Atoi(pageSize)
+		if err != nil || size < 1 {
+			h.errorResponse(w, "invalid page size", err, http.StatusBadRequest)
+			return
+		}
+		pagination.PageSize = size
+	}
+
+	filter := &domain.ApplicationFilter{
+		OrderField:     r.URL.Query().Get("order_field"),
+		OrderDirection: r.URL.Query().Get("order_direction"),
+		Status:         r.URL.Query().Get("status"),
+		ProjectName:    r.URL.Query().Get("project_name"),
+		PropertyType:   r.URL.Query().Get("property_type"),
+	}
+
+	if daysInStatus := r.URL.Query().Get("days_in_status"); daysInStatus != "" {
+		if days, err := strconv.Atoi(daysInStatus); err == nil {
+			filter.DaysInStatus = days
+		}
+	}
+
+	response, err := h.audienceService.ListApplications(ctx, pagination, filter)
+	if err != nil {
+		h.errorResponse(w, "failed to get applications", err, http.StatusInternalServerError)
+		return
+	}
+
+	h.jsonResponse(w, response, http.StatusOK)
 }
 
+func (h *Handler) ExportApplications(w http.ResponseWriter, r *http.Request) {
+    ctx := r.Context()
+
+    // vars := mux.Vars(r)
+
+    // Parse filter parameters
+    filter := &domain.ApplicationFilter{
+        Status:         r.URL.Query().Get("status"),
+        PropertyType:   r.URL.Query().Get("property_type"),
+        ProjectName:    r.URL.Query().Get("project_name"),
+        OrderField:     r.URL.Query().Get("order_field"),
+        OrderDirection: r.URL.Query().Get("order_direction"),
+    }
+
+    // Parse days_in_status if provided
+    if daysStr := r.URL.Query().Get("days_in_status"); daysStr != "" {
+        if days, err := strconv.Atoi(daysStr); err == nil {
+            filter.DaysInStatus = days
+        } else {
+            h.logger.Warn("invalid days_in_status parameter", zap.Error(err))
+        }
+    }
+
+	filePath, fileName, err := h.audienceService.ExportApplications(ctx, *filter)
+	if err != nil {
+		h.errorResponse(w, "failed to export applications: "+err.Error(), err, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
+	http.ServeFile(w, r, filePath)
+}
 
 func (h *Handler) errorResponse(w http.ResponseWriter, message string, err error, code int) {
-    h.logger.Error(message,
-        zap.Error(err),
-        zap.Int("status_code", code))
+	h.logger.Error(message,
+		zap.Error(err),
+		zap.Int("status_code", code))
 
-    h.jsonResponse(w, Response{
-        Error: message,
-    }, code)
+	h.jsonResponse(w, Response{
+		Error: message,
+	}, code)
 }
 
 func (h *Handler) jsonResponse(w http.ResponseWriter, data interface{}, code int) {
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(code)
-    
-    if err := json.NewEncoder(w).Encode(data); err != nil {
-        h.logger.Error("failed to encode response",
-            zap.Error(err))
-    }
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		h.logger.Error("failed to encode response",
+			zap.Error(err))
+	}
 }

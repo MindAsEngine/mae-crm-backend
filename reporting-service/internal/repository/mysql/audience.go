@@ -81,11 +81,11 @@ func (r *MySQLAudienceRepository) GetApplicationsByAudienceFilter(ctx context.Co
             eb.date_added,
             eb.updated_at,
             eb.status_name,
-			eb.manager_id,
+			COALESCE(eb.manager_id, -1) as manager_id,
 			eb.contacts_id,
 			eb.status,
 			COALESCE(ebrs.name, '') as name,
-			COALESCE(ebrs.status_reason_id, 0) as status_reason_id
+			COALESCE(ebrs.status_reason_id, -1) as status_reason_id
         FROM estate_buys eb LEFT JOIN estate_statuses_reasons ebrs
         ON ebrs.status_reason_id=eb.status_reason_id
 		WHERE 1=1
@@ -144,11 +144,11 @@ func (r *MySQLAudienceRepository) GetNewApplicationsByAudience(ctx context.Conte
             eb.date_added,
             eb.updated_at,
             eb.status_name,
-			eb.manager_id,
+			COALESCE(eb.manager_id, -1) as manager_id,
 			eb.contacts_id,
 			eb.status,
 			COALESCE(ebrs.name, '') as name,
-			COALESCE(ebrs.status_reason_id, 0) as status_reason_id
+			COALESCE(ebrs.status_reason_id, -1) as status_reason_id
         FROM estate_buys eb LEFT JOIN estate_statuses_reasons ebrs
         ON ebrs.status_reason_id=eb.status_reason_id
 		WHERE 1=1
@@ -276,11 +276,11 @@ func (r *MySQLAudienceRepository) ListApplicationsByIds(ctx context.Context, app
             eb.date_added,
             eb.updated_at,
             eb.status_name,
-			eb.manager_id,
+			COALESCE(eb.manager_id, -1) as manager_id,
 			eb.contacts_id,
 			eb.status,
 			COALESCE(ebrs.name, '') as name,
-			COALESCE(ebrs.status_reason_id, 0) as status_reason_id
+			COALESCE(ebrs.status_reason_id, -1) as status_reason_id
         FROM estate_buys eb LEFT JOIN estate_statuses_reasons ebrs
         ON ebrs.status_reason_id=eb.status_reason_id
 		WHERE id IN (:application_id)
@@ -310,35 +310,35 @@ func (r *MySQLAudienceRepository) ListApplicationsByIds(ctx context.Context, app
 }
 
 func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Context, pagination *domain.PaginationRequest, filter *domain.ApplicationFilter) (*domain.PaginationResponse, error) {
-    // Build base query for counting
-    countQuery := `
+	// Build base query for counting
+	countQuery := `
         SELECT COUNT(*) 
         FROM estate_buys eb
         LEFT JOIN estate_houses h ON h.id = eb.house_id
         WHERE eb.company_id = 528
     `
 
-    // Build where conditions and args map
-    whereConditions := []string{}
-    args := map[string]interface{}{}
+	// Build where conditions and args map
+	whereConditions := []string{}
+	args := map[string]interface{}{}
 
-    if filter.Status != "" {
-        whereConditions = append(whereConditions, "eb.status_name = :status")
-        args["status"] = filter.Status
-    }
+	if filter.Status != "" {
+		whereConditions = append(whereConditions, "eb.status_name = :status")
+		args["status"] = filter.Status
+	}
 
-    if filter.PropertyType != "" {
-        whereConditions = append(whereConditions, "eb.category = :property_type")
-        args["property_type"] = filter.PropertyType
-    }
+	if filter.PropertyType != "" {
+		whereConditions = append(whereConditions, "eb.category = :property_type")
+		args["property_type"] = filter.PropertyType
+	}
 
-    if filter.ProjectName != "" {
-        whereConditions = append(whereConditions, "h.complex_name = :project_name")
-        args["project_name"] = "%" + filter.ProjectName + "%"
-    }
+	if filter.ProjectName != "" {
+		whereConditions = append(whereConditions, "h.complex_name = :project_name")
+		args["project_name"] = "%" + filter.ProjectName + "%"
+	}
 
-    if filter.DaysInStatus > 0 {
-        whereConditions = append(whereConditions, `
+	if filter.DaysInStatus > 0 {
+		whereConditions = append(whereConditions, `
             DATEDIFF(NOW(), COALESCE(
                 (SELECT MAX(log_date) 
                 FROM estate_buys_statuses_log 
@@ -347,27 +347,27 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
                 eb.date_added
             )) >= :days_in_status
         `)
-        args["days_in_status"] = filter.DaysInStatus
-    }
+		args["days_in_status"] = filter.DaysInStatus
+	}
 
-    if len(whereConditions) > 0 {
-        countQuery += " AND " + strings.Join(whereConditions, " AND ")
-    }
+	if len(whereConditions) > 0 {
+		countQuery += " AND " + strings.Join(whereConditions, " AND ")
+	}
 
-    // Get total count
-    var totalItems int64
-    countQuery, countArgs, err := sqlx.Named(countQuery, args)
-    if err != nil {
-        return nil, fmt.Errorf("prepare count query: %w", err)
-    }
+	// Get total count
+	var totalItems int64
+	countQuery, countArgs, err := sqlx.Named(countQuery, args)
+	if err != nil {
+		return nil, fmt.Errorf("prepare count query: %w", err)
+	}
 
-    countQuery = r.db.Rebind(countQuery)
-    if err := r.db.GetContext(ctx, &totalItems, countQuery, countArgs...); err != nil {
-        return nil, fmt.Errorf("count applications: %w", err)
-    }
+	countQuery = r.db.Rebind(countQuery)
+	if err := r.db.GetContext(ctx, &totalItems, countQuery, countArgs...); err != nil {
+		return nil, fmt.Errorf("count applications: %w", err)
+	}
 
-    // Prepare main query
-    query := `
+	// Prepare main query
+	query := `
         SELECT 
             eb.id AS id,
             eb.date_added AS date_added,
@@ -375,7 +375,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
             eb.status_name AS status_name,
             COALESCE(edc.contacts_buy_phones, 'Не указано') AS phone,
             COALESCE(u.users_name, 'Не назначен') AS manager_name,
-            eb.category AS property_type,
+            COALESCE(eb.category, "Не указано") AS property_type,
             DATEDIFF(NOW(), COALESCE(
                 (SELECT MAX(log_date) 
                 FROM estate_buys_statuses_log 
@@ -391,43 +391,177 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
         WHERE eb.company_id = 528
     `
 
-    if len(whereConditions) > 0 {
-        query += " AND " + strings.Join(whereConditions, " AND ")
+	if len(whereConditions) > 0 {
+		query += " AND " + strings.Join(whereConditions, " AND ")
+	}
+
+	// Add pagination
+	if pagination.PageSize <= 0 {
+		pagination.PageSize = 10
+	}
+	if pagination.Page <= 0 {
+		pagination.Page = 1
+	}
+
+	offset := (pagination.Page - 1) * pagination.PageSize
+
+	// Define allowed sort fields mapping
+	sortableFields := map[string]string{
+		"id":           "eb.id",
+		"created_date": "eb.date_added",
+		"client_name":  "edc.contacts_buy_name",
+		"status":       "eb.status_name",
+		"phone":        "edc.contacts_buy_phones",
+		"manager":      "u.users_name",
+		"property":     "eb.category",
+	}
+
+	// Build ORDER BY clause
+	orderClause := " ORDER BY eb.date_added DESC" // Default sorting
+    
+    if filter.OrderField != "" {
+        dbField, exists := sortableFields[filter.OrderField]
+        if !exists {
+            r.logger.Warn("invalid sort field requested, using default", 
+                zap.String("field", filter.OrderField))
+        } else {
+            direction := "ASC"
+            if strings.ToUpper(filter.OrderDirection) == "DESC" {
+                direction = "DESC"
+            }
+            orderClause = fmt.Sprintf(" ORDER BY %s %s", dbField, direction)
+        }
     }
 
-    // Add pagination
-    if pagination.PageSize <= 0 {
-        pagination.PageSize = 10
-    }
-    if pagination.Page <= 0 {
-        pagination.Page = 1
-    }
-    
-    offset := (pagination.Page - 1) * pagination.PageSize
-    
-    query += " ORDER BY eb.date_added DESC LIMIT :limit OFFSET :offset"
+    // Apply pagination after sorting
+    fullQuery := query + orderClause + " LIMIT :limit OFFSET :offset"
     args["limit"] = pagination.PageSize
     args["offset"] = offset
 
-    // Execute main query
-    query, queryArgs, err := sqlx.Named(query, args)
+    // Debug log
+    r.logger.Debug("executing query", 
+        zap.String("query", fullQuery),
+        zap.Any("args", args))
+
+    // Execute query with sorting and pagination
+    query, queryArgs, err := sqlx.Named(fullQuery, args)
     if err != nil {
-        return nil, fmt.Errorf("prepare main query: %w", err)
+        return nil, fmt.Errorf("prepare query: %w", err)
     }
 
-    query = r.db.Rebind(query)
-    var items []domain.Application
-    if err := r.db.SelectContext(ctx, &items, query, queryArgs...); err != nil {
-        return nil, fmt.Errorf("select applications: %w", err)
+	query = r.db.Rebind(query)
+	var items []domain.Application
+	if err := r.db.SelectContext(ctx, &items, query, queryArgs...); err != nil {
+		return nil, fmt.Errorf("select applications: %w", err)
+	}
+
+	totalPages := int(math.Ceil(float64(totalItems) / float64(pagination.PageSize)))
+
+	return &domain.PaginationResponse{
+		Items:      items,
+		TotalItems: totalItems,
+		TotalPages: totalPages,
+		Page:       pagination.Page,
+		PageSize:   pagination.PageSize,
+	}, nil
+}
+
+func (r *MySQLAudienceRepository) ExportApplicationsWithFilters(ctx context.Context, filter *domain.ApplicationFilter) ([]domain.Application, error) {
+    baseQuery := `
+        SELECT 
+            eb.id AS id,
+            eb.date_added AS date_added,
+            COALESCE(edc.contacts_buy_name, 'Не указано') AS client_name,
+            COALESCE(eb.status_name, "Не указано") AS status_name,
+            COALESCE(edc.contacts_buy_phones, 'Не указано') AS phone,
+            COALESCE(u.users_name, 'Не назначен') AS manager_name,
+            COALESCE(eb.category, "Не указано") AS property_type,
+            DATEDIFF(NOW(), COALESCE(
+                (SELECT MAX(log_date) 
+                FROM estate_buys_statuses_log 
+                WHERE estate_buy_id = eb.id 
+                AND status_to = eb.status),
+                eb.date_added
+            )) AS days_in_status,
+            COALESCE(h.complex_name, 'Не указан') AS project_name
+        FROM estate_buys eb
+        LEFT JOIN estate_deals_contacts edc ON edc.id = eb.contacts_id
+        LEFT JOIN users u ON u.id = eb.manager_id
+        LEFT JOIN estate_houses h ON h.id = eb.house_id
+        WHERE eb.company_id = 528`
+
+    whereConditions := []string{}
+    var args []interface{}
+
+    if filter.Status != "" {
+        whereConditions = append(whereConditions, "eb.status_name = ?")
+        args = append(args, filter.Status)
     }
 
-    totalPages := int(math.Ceil(float64(totalItems) / float64(pagination.PageSize)))
+    if filter.PropertyType != "" {
+        whereConditions = append(whereConditions, "eb.category = ?")
+        args = append(args, filter.PropertyType)
+    }
 
-    return &domain.PaginationResponse{
-        Items:      items,
-        TotalItems: totalItems,
-        TotalPages: totalPages,
-        Page:       pagination.Page,
-        PageSize:   pagination.PageSize,
-    }, nil
+    if filter.ProjectName != "" {
+        whereConditions = append(whereConditions, "h.complex_name LIKE ?")
+        args = append(args, "%"+filter.ProjectName+"%")
+    }
+
+    if filter.DaysInStatus > 0 {
+        whereConditions = append(whereConditions, `
+            DATEDIFF(NOW(), COALESCE(
+                (SELECT MAX(log_date) 
+                FROM estate_buys_statuses_log 
+                WHERE estate_buy_id = eb.id 
+                AND status_to = eb.status),
+                eb.date_added
+            )) >= ?
+        `)
+        args = append(args, filter.DaysInStatus)
+    }
+
+    if len(whereConditions) > 0 {
+        baseQuery += " AND " + strings.Join(whereConditions, " AND ")
+    }
+
+    orderClause := " ORDER BY eb.date_added DESC"
+    if filter.OrderField != "" {
+        sortableFields := map[string]string{
+            "id":           "eb.id",
+            "created_date": "eb.date_added",
+            "client_name":  "edc.contacts_buy_name",
+            "status":       "eb.status_name",
+            "phone":        "edc.contacts_buy_phones",
+            "manager":      "u.users_name",
+            "property":     "eb.category",
+        }
+
+        if dbField, exists := sortableFields[filter.OrderField]; exists {
+            direction := "ASC"
+            if strings.ToUpper(filter.OrderDirection) == "DESC" {
+                direction = "DESC"
+            }
+            orderClause = fmt.Sprintf(" ORDER BY %s %s", dbField, direction)
+        } else {
+            r.logger.Warn("invalid sort field requested, using default", 
+                zap.String("field", filter.OrderField))
+        }
+    }
+
+    fullQuery := baseQuery + orderClause
+
+    r.logger.Debug("executing export query",
+        zap.String("query", fullQuery),
+        zap.Any("args", args))
+
+    var applications []domain.Application
+    if err := r.db.SelectContext(ctx, &applications, fullQuery, args...); err != nil {
+        return nil, fmt.Errorf("select applications for export: %w", err)
+    }
+
+    r.logger.Info("applications exported successfully",
+        zap.Int("count", len(applications)))
+
+    return applications, nil
 }

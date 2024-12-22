@@ -16,7 +16,7 @@ type Application struct {
 	StatusID       int64     `json:"status_id" db:"status"`
 	ReasonName     string    `json:"reason_name" db:"name"`
 	ReasonId       int64     `json:"status_reason_id,omitempty" db:"status_reason_id"`
-	Name           string    `json:"name" db:"client_name"`
+	ClientName     string    `json:"name" db:"client_name"`
 	Phone          string    `json:"phone" db:"phone"`
 	BirthPlace     string    `json:"birth_place" db:"birth_place"`
 	PropertyType   string    `json:"property_type" db:"property_type"`
@@ -50,6 +50,7 @@ type Integration struct {
 	ID          int64  `json:"id" db:"id"`
 	AudienceID  int64  `json:"audience_id" db:"audience_id"`
 	CabinetName string `json:"cabinet_name" db:"cabinet_name"` // Например: Google Ads, Facebook
+	ExternalID  int64  `json:"external_id" db:"external_id"`
 	CreatedAt   string `json:"created_at" db:"created_at"`
 	UpdatedAt   string `json:"updated_at" db:"updated_at"`
 }

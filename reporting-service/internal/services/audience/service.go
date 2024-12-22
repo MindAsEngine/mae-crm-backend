@@ -174,7 +174,7 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (s *Service) Export(ctx context.Context, id int64) (string, error) {
+func (s *Service) ExportAudience(ctx context.Context, id int64) (string, string, error) {
 	return s.exporter.ExportAudience(ctx, id)
 }
 
@@ -204,13 +204,12 @@ func (s *Service) UpdateAudience(ctx context.Context, id int64, application_ids 
 }
 
 func (s *Service) ListApplications(ctx context.Context, pagination *domain.PaginationRequest, filter *domain.ApplicationFilter) (*domain.PaginationResponse, error) {
-    response, err := s.mysqlRepo.ListApplicationsWithFilters(ctx, pagination, filter)
-    if err != nil {
-        return nil, fmt.Errorf("get applications: %w", err)
-    }
-    return response, nil
+	response, err := s.mysqlRepo.ListApplicationsWithFilters(ctx, pagination, filter)
+	if err != nil {
+		return nil, fmt.Errorf("get applications: %w", err)
+	}
+	return response, nil
 }
-
 
 func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 	audiences, err := s.audienceRepo.List(ctx)
@@ -333,15 +332,22 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 	return nil
 }
 
+func (s *Service) ExportApplications(ctx context.Context, filter domain.ApplicationFilter) (string, string, error) {
+	return s.exporter.ExportApplications(ctx, &filter)
+}
+
 func (s *Service) pushAudienceToRabbit(ctx context.Context, audience *domain.Audience) error {
 	chunks := splitIntoChunks(audience.Application_ids, 1000)
 
-	for _, chunk := range chunks {
+	for i, chunk := range chunks {
 
 		message := domain.AudienceMessage{
-			AudienceID:        audience.ID,
-			Integration_names: audience.IntegrationNames,
-			Application_ids:   chunk,
+			CurrentChunk:    i+1,
+			TotalChunks:     len(chunks),
+			AudienceName:    audience.Name,
+			AudienceID:      audience.ID,
+			Integrations:    audience.Integrations,
+			Application_ids: chunk,
 		}
 
 		body, err := json.Marshal(message)

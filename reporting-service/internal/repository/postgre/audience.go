@@ -169,28 +169,6 @@ func (r *PostgresAudienceRepository) GetFilterByAudienceId(ctx context.Context, 
 	if err != nil {
 		return nil, fmt.Errorf("scan filter: %w", err)
 	}
-
-	// query := `
-	// SELECT
-	//     id,
-	//     audience_id,
-	//     creation_date_from,
-	//     creation_date_to,
-	//     status_names::text[], -- явно указываем приведение типа
-	//     status_ids::integer[],  -- для массивов
-	//     rejection_reasons::text[],
-	//     non_target_reasons::text[],
-	//     reason_ids::integer[]
-	// FROM audience_filters
-	// WHERE audience_id = $1`
-
-	// Для отладки
-	// fmt.Printf("Executing query for audience_id: %d\n", audience_id)
-
-	// if err := r.db.GetContext(ctx, filter, query, audience_id); err != nil {
-	//     return nil, fmt.Errorf("get filter (audience_id=%d): %w", audience_id, err)
-	// }
-
 	return &filter, err
 }
 
@@ -278,7 +256,9 @@ func (r *PostgresAudienceRepository) List(ctx context.Context) ([]domain.Audienc
 		integrationsQuery := `
             SELECT 
                 i.id,
+				i.audience_id,
                 i.cabinet_name,
+				COALESCE(i.external_id, -1) as external_id,
                 i.created_at,
                 i.updated_at
             FROM integrations i
