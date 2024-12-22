@@ -1,6 +1,5 @@
 import csv
 
-from Tools.scripts.objgraph import externals
 from facebook_business.adobjects.adaccount import AdAccount
 from facebook_business.api import FacebookAdsApi
 from facebook_business.adobjects.customaudience import CustomAudience
@@ -8,6 +7,7 @@ from facebook_business.adobjects.customaudience import CustomAudience
 # from google.ads.googleads.errors import GoogleAdsException
 import requests
 import os
+from logger import logger
 
 
 import hashlib
@@ -226,7 +226,7 @@ def create_csv_file(applications):
     for app in applications:
         user_data = prepare_facebook_user_data(app)
         results.append(user_data)
-    with open('audience.csv', 'w', newline='') as file:
+    with open('yandex.csv', 'w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(results[0].keys())
         for result in results:
@@ -240,72 +240,63 @@ class YandexIntegration:
         self.headers = {"Authorization": f"OAuth {oauth_token}"}
 
     def get_audiences(self):
-        try:
-            response = requests.get(
-                url=self.base_url+'s',
-                headers=self.headers
-            )
-            if response.status_code != 200:
-
-                raise Exception(f"Ошибка получения аудиторий Яндекс.Аудитории: {response.text}")
-            return response.json()
-        except Exception as ex:
-            print("Ошибка получения аудиторий Яндекс.Аудитории" + str(ex))
-            raise
+        response = requests.get(
+            url=self.base_url+'s',
+            headers=self.headers
+        )
+        if response.status_code != 200:
+            logger.error(f"Ошибка получения все аудиторий Яндекс.Аудитории: {response.text}")
+            raise Exception(f"Ошибка получения все аудиторий Яндекс.Аудитории: {response.text}")
+        logger.debug(f"Получены аудитории Яндекс.Аудитории: {response.status_code}")
+        return response.json()
 
     def update_name(self, audience_id, name):
-        try:
-            response = requests.put(
-                url=self.base_url + f'/{audience_id}',
-                headers=self.headers,
-                json={"segment": {"name": name}}
-            )
-            if response.status_code != 200:
-                raise Exception(f"Ошибка обновления имени аудитории Яндекс.Аудитории: {response.text}")
-            print(f"Имя аудитории успешно обновлено: {name}")
-            return name
-        except Exception as ex:
-            print("Ошибка обновления имени аудитории Яндекс.Аудитории" + str(ex))
-            raise Exception(f"Ошибка Яндекс.Аудитории: {str(ex)}")
+        response = requests.put(
+            url=self.base_url + f'/{audience_id}',
+            headers=self.headers,
+            json={"segment": {"name": name}}
+        )
+        if response.status_code != 200:
+            logger.error(f"Ошибка обновления имени аудитории Яндекс.Аудитории: {response.text}")
+            raise Exception(f"Ошибка обновления имени аудитории Яндекс.Аудитории: {response.text}")
+        print(f"Имя аудитории успешно обновлено: {name}")
+        logger.debug(f"Имя аудитории успешно обновлено: {name}")
+        return name
+
 
 
 
     def upload_applications(self, applications, audience_id=None, audience_name=None):
-        try:
-            if not audience_id:
-                url = self.base_url + 's/upload_csv_file'
-            else:
-                url = self.base_url + f'/{audience_id}/modify_data'
-            csv_file = create_csv_file(applications)
-
-
-            response = requests.post(
-                url= url,
-                headers=self.headers,
-                files={"file": open(csv_file, "rb")}
-            )
-            if response.status_code != 200:
-                raise Exception(f"Ошибка загрузки данных в аудиторию Яндекс.Аудитории: {response.text}")
-            if audience_id:
-                print(f"Данные успешно загружены в аудиторию: {audience_id}")
-            else:
-                print(f"Данные успешно загружены в новую аудиторию")
-            json_response = response.json()
-            external_id = json_response["segment"]["id"]
-            status = json_response["segment"]["status"]
-            if not audience_id and audience_name:
-                name = self.update_name(external_id, audience_name)
-            else:
-                name = json_response["segment"]["name"]
-            return {
-                "result": "success",
-                "external_id": external_id,
-                "status": status,
-                "name": name
-            }
-        except Exception as ex:
-            print(ex)
-            raise Exception(f"Ошибка Яндекс.Аудитории: {str(ex)}")
+        if not audience_id:
+            url = self.base_url + 's/upload_csv_file'
+        else:
+            url = self.base_url + f'/{audience_id}/modify_data'
+        csv_file = create_csv_file(applications)
+        response = requests.post(
+            url= url,
+            headers=self.headers,
+            files={"file": open(csv_file, "rb")}
+        )
+        if response.status_code != 200:
+            logger.error(f"Ошибка загрузки данных в аудиторию Яндекс.Аудитории: {response.text}")
+            raise Exception(f"Ошибка загрузки данных в аудиторию Яндекс.Аудитории: {response.text}")
+        if audience_id:
+           logger.debug(f"Данные успешно загружены в существующую аудиторию")
+        else:
+            logger.debug(f"Данные успешно загружены в новую аудиторию")
+        json_response = response.json()
+        external_id = json_response["segment"]["id"]
+        status = json_response["segment"]["status"]
+        if not audience_id and audience_name:
+            name = self.update_name(external_id, audience_name)
+        else:
+            name = json_response["segment"]["name"]
+        return {
+            "result": "success",
+            "external_id": external_id,
+            "status": status,
+            "name": name
+        }
 
     def send_audience(self,  audience_name, application_ids, external_id=None):
         try:

@@ -9,6 +9,7 @@ import ads_integrations
 import pika
 import json
 from dotenv import load_dotenv
+from logger import logger
 
 message_storage = defaultdict(list)  # Ключ: audience_id, Значение: список сообщений
 message_lock = threading.Lock()  # Для потокобезопасности
@@ -30,10 +31,13 @@ def callback(ch, method, properties, body):
                       "timestamp": datetime.datetime.now().isoformat()}
         else: # Если audience_id указан
             with message_lock:
+
                 print("Положили на полочку сообщение для аудитории ", audience_id)
+                logger.info(f"Получено сообщение для аудитории {audience_id}")
                 message_storage[audience_id].append(data)
             if len(message_storage[audience_id]) >= total_chunks and current_chunk >= total_chunks:
                 print("Начало обработки сообщений для аудитории ", audience_id)
+                logger.info(f"Начало обработки сообщений для аудитории {audience_id}")
                 application_ids = []
                 for message in message_storage[audience_id]:
                     application_ids.extend(message.get('application_ids', []))
@@ -51,9 +55,11 @@ def callback(ch, method, properties, body):
                             properties=pika.BasicProperties(correlation_id=properties.correlation_id),
                             body=json.dumps(result))
             print(f"Сообщение обработано: {result}")
+            logger.info(f"Сообщение обработано: {result}")
 
     except Exception as e:
         print(f"Ошибка обработки сообщения: {e}")
+        logger.error(f"Ошибка обработки сообщения: {e}")
 
 
 def process_message(data):
@@ -62,7 +68,8 @@ def process_message(data):
         audience_name = data.get('audience_name', f'Audience_{audience_id}')
         application_ids = data.get('application_ids', [])
         integrations = data.get('integrations', [])
-        print(f"Processing audience '{audience_id}' with {len(application_ids)} records and integrations {integrations}")
+        # print(f"Обработка сообщения для аудитории {audience_id} с интеграциями {integrations}")
+        # logger.info(f"Обработка сообщения для аудитории {audience_id} с интеграциями {integrations}")
 
         applications = get_applications_by_id(application_ids)
         results = {"audience_id": audience_id}
@@ -120,16 +127,19 @@ if __name__ == '__main__':
             try:
                 connection = pika.BlockingConnection(connection_params)
                 channel = connection.channel()
+                logger.info("Подключение к RabbitMQ установлено")
                 break  # Если подключение удалось, выходим из цикла
             except Exception as e:
             #except pika.exceptions.AMQPConnectionError as e:
                 print(f"Ошибка соединения: {e}. Попробую снова через 5 секунд.")
+                logger.error(f"Ошибка соединения: {e}. Попробую снова через 5 секунд.")
                 time.sleep(5)  # Пауза перед повторной попыткой подключения
         channel.queue_declare(queue=RABBITMQ_STATUS_QUEUE, durable=True)
-        # Создаем канал с подтверждением доставки
-
+        # Создаем канал с подтверждением доставк
         channel.basic_consume(queue=RABBITMQ_QUEUE, on_message_callback=callback, auto_ack=True)
         print('Ожидание сообщений...')
+        logger.info("Ожидание сообщений...")
         channel.start_consuming()
     except Exception as e:
         print(f"Ошибка подключения: {e}")
+        logger.error(f"Ошибка подключения: {e}")
