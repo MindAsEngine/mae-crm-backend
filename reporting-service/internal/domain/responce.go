@@ -2,14 +2,13 @@ package domain
 
 import "time"
 
-
-
 type PaginationResponse struct {
-    Items      interface{} `json:"items"`
-    TotalItems int64      `json:"total_items"`
-    TotalPages int        `json:"total_pages"`
-    Page       int        `json:"page"`
-    PageSize   int        `json:"page_size"`
+	Headers    []Header    `json:"header"`
+	Items      interface{} `json:"items"`
+	TotalItems int64       `json:"total_items"`
+	TotalPages int         `json:"total_pages"`
+	Page       int         `json:"page"`
+	PageSize   int         `json:"page_size"`
 }
 
 type ErrorResponse struct {
@@ -22,26 +21,25 @@ type ErrorResponse struct {
 type ApplicationFilterResponce struct {
 	//OrderField     string 	  `json:"order_field"`
 	//OrderDirection string 	  `json:"order_direction"`
-	Statuses        []string 	  `json:"status_names" form:"status_names"`
+	Statuses []string `json:"status_names" form:"status_names"`
 	//StatusDuration int64  	  `json:"status_duration,omitempty" form:"status_duration"`
-	ProjectNames    []string 	  `json:"project_names" form:"project_names"`
-	PropertyTypes   []string 	  `json:"property_types" form:"property_types"`
-	AudienceNames   []string 	  `json:"audience_names" form:"audience_names"`
+	ProjectNames  []string `json:"project_names" form:"project_names"`
+	PropertyTypes []string `json:"property_types" form:"property_types"`
+	AudienceNames []string `json:"audience_names" form:"audience_names"`
 	//CreatedAtFrom  *time.Time `json:"created_at_from" form:"created_at_from"`
 	//CreatedAtTo    *time.Time `json:"created_at_to" form:"created_at_to"`
 	//DeadlinePassed bool       `json:"deadline_passed" form:"deadline_passed"`
 }
 
-
 //audience reports
 type AudienceResponse struct {
-	ID                 int64         `json:"id"`
-	Name               string        `json:"name"`
-	Integrations       []Integration `json:"integrations"`
+	ID           int64         `json:"id"`
+	Name         string        `json:"name"`
+	Integrations []Integration `json:"integrations"`
 	//Application_ids    []int64       `json:"application_ids"`
-	Applications_count int           `json:"application_count"`
-	CreatedAt          time.Time     `json:"created_at"`
-	UpdatedAt          time.Time     `json:"updated_at"`
+	Applications_count int       `json:"application_count"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 type IntegrationsCreateResponse struct {
@@ -50,22 +48,16 @@ type IntegrationsCreateResponse struct {
 
 //region report
 type Header struct {
-    Name         string `json:"name"`
-    IsID         bool   `json:"is_id"`
-    Title        string `json:"title"`
-    IsVisible    bool   `json:"is_visible"`
-    IsAdditional bool   `json:"is_additional"`
-    Format       string `json:"format"`
-}
-
-type RegionData struct {
-    ID            int            `json:"id" db:"id"`
-    NameOfProject string         `json:"name_of_projects" db:"name"`
-    RegionCounts  map[int]int    `json:"-" db:"-"`
+	Name         string `json:"name"`
+	IsID         bool   `json:"is_id"`
+	Title        string `json:"title"`
+	IsVisible    bool   `json:"is_visible"`
+	IsAdditional bool   `json:"is_additional"`
+	Format       string `json:"format"`
 }
 
 type RegionsResponse struct {
-    Headers []Header     `json:"headers"`
-    Data    []RegionData `json:"data"`
-    Footer  RegionData   `json:"footer"`
+	Headers []Header                 `json:"headers"`
+	Data    []map[string]interface{} `json:"data"`
+	Footer  map[string]int   `json:"footer"`
 }

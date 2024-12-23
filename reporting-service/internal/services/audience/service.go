@@ -398,11 +398,11 @@ func (s *Service) pushAudienceToRabbit(ctx context.Context, audience *domain.Aud
 }
 
 func (s *Service) GetRegions(ctx context.Context, filter *domain.RegionFilter) (*domain.RegionsResponse, error) {
-    s.logger.Info("getting regions data",
-        zap.String("search", filter.Search),
-        zap.Time("start_date", *filter.StartDate),
-        zap.Time("end_date", *filter.EndDate),
-        zap.String("sort", filter.Sort))
+    s.logger.Info("getting regions data")//,
+        //zap.String("search", filter.Search),
+        //zap.Time("start_date", *filter.StartDate),
+        //zap.Time("end_date", *filter.EndDate),
+        //zap.String("sort", filter.Sort))
 
     response, err := s.mysqlRepo.GetRegionsData(ctx, filter)
     if err != nil {

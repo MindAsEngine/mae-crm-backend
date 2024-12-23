@@ -4,12 +4,11 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"regexp"
+	//"time"
+
 	"reporting-service/internal/domain"
 	"strings"
-
-	//"reporting-service/internal/repository"
-
-	//"time"
 
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/zap"
@@ -69,7 +68,7 @@ func (r *MySQLAudienceRepository) GetFilters(ctx context.Context) (domain.Applic
 	if err := r.db.SelectContext(ctx, &filter.Statuses, query); err != nil {
 		return domain.ApplicationFilterResponce{}, fmt.Errorf("select filters: %w", err)
 	}
-	query = `SELECT Distinct geo_complex_name FROM macro_bi_cmp_528.geo_city_complex`
+	query = `SELECT Distinct complex_name FROM macro_bi_cmp_528.estate_houses`
 	if err := r.db.SelectContext(ctx, &filter.ProjectNames, query); err != nil {
 		return domain.ApplicationFilterResponce{}, fmt.Errorf("select filters: %w", err)
 	}
@@ -80,7 +79,6 @@ func (r *MySQLAudienceRepository) GetFilters(ctx context.Context) (domain.Applic
 	return filter, nil
 
 }
-
 
 func (r *MySQLAudienceRepository) GetApplicationsByAudienceFilter(ctx context.Context, filter domain.AudienceCreationFilter) ([]domain.Application, error) {
 	// Validate filter
@@ -318,54 +316,10 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
         LEFT JOIN estate_houses h ON h.id = eb.house_id
         WHERE eb.company_id = 528
     `
-
 	// Build where conditions and args map
-	whereConditions := []string{}
 	args := map[string]interface{}{}
-
-	if filter.Status != "" {
-		whereConditions = append(whereConditions, "eb.status_name = :status")
-		args["status"] = filter.Status
-	}
-
-	if filter.PropertyType != "" {
-		whereConditions = append(whereConditions, "eb.category = :property_type")
-		args["property_type"] = filter.PropertyType
-	}
-
-	if filter.ProjectName != "" {
-		whereConditions = append(whereConditions, "h.complex_name = :project_name")
-		args["project_name"] = "%" + filter.ProjectName + "%"
-	}
-
-	if filter.StatusDuration > 0 {
-		whereConditions = append(whereConditions, `
-            DATEDIFF(NOW(), COALESCE(
-                (SELECT MAX(log_date) 
-                FROM estate_buys_statuses_log 
-                WHERE estate_buy_id = eb.id 
-                AND status_to = eb.status),
-                eb.date_added
-            )) >= :days_in_status
-        `)
-		args["days_in_status"] = filter.StatusDuration
-	}
-
-	if len(whereConditions) > 0 {
-		countQuery += " AND " + strings.Join(whereConditions, " AND ")
-	}
-
 	// Get total count
 	var totalItems int64
-	countQuery, countArgs, err := sqlx.Named(countQuery, args)
-	if err != nil {
-		return nil, fmt.Errorf("prepare count query: %w", err)
-	}
-
-	countQuery = r.db.Rebind(countQuery)
-	if err := r.db.GetContext(ctx, &totalItems, countQuery, countArgs...); err != nil {
-		return nil, fmt.Errorf("count applications: %w", err)
-	}
 
 	// Prepare main query
 	query := `
@@ -391,6 +345,48 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
         LEFT JOIN estate_houses h ON h.id = eb.house_id
         WHERE eb.company_id = 528
     `
+	whereConditions := []string{}
+	if filter.Status != "" {
+		whereConditions = append(whereConditions, "eb.status_name = :status")
+		args["status"] = filter.Status
+	}
+
+	if filter.PropertyType != "" {
+		whereConditions = append(whereConditions, "eb.category = :property_type")
+		args["property_type"] = filter.PropertyType
+	}
+
+	if filter.ProjectName != "" {
+		whereConditions = append(whereConditions, "h.complex_name = :project_name")
+		args["project_name"] = filter.ProjectName
+	}
+
+	if filter.StatusDuration > 0 {
+		whereConditions = append(whereConditions, `
+		DATEDIFF(NOW(), COALESCE(
+			(SELECT MAX(log_date) 
+			FROM estate_buys_statuses_log 
+			WHERE estate_buy_id = eb.id 
+			AND status_to = eb.status),
+			eb.date_added
+		)) >= :days_in_status
+	`)
+		args["days_in_status"] = filter.StatusDuration
+	}
+
+	if filter.CreatedAtFrom != nil &&
+		filter.CreatedAtTo != nil &&
+		!filter.CreatedAtFrom.IsZero() &&
+		!filter.CreatedAtTo.IsZero() {
+		whereConditions = append(whereConditions, "eb.date_added >= :created_at_from")
+		args["created_at_from"] = filter.CreatedAtFrom
+		whereConditions = append(whereConditions, "eb.date_added <= :created_at_to")
+		args["created_at_to"] = filter.CreatedAtTo
+	}
+
+	if len(whereConditions) > 0 {
+		countQuery += " AND " + strings.Join(whereConditions, " AND ")
+	}
 
 	if len(whereConditions) > 0 {
 		query += " AND " + strings.Join(whereConditions, " AND ")
@@ -419,36 +415,47 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 
 	// Build ORDER BY clause
 	orderClause := " ORDER BY eb.date_added DESC" // Default sorting
-    
-    if filter.OrderField != "" {
-        dbField, exists := sortableFields[filter.OrderField]
-        if !exists {
-            r.logger.Warn("invalid sort field requested, using default", 
-                zap.String("field", filter.OrderField))
-        } else {
-            direction := "ASC"
-            if strings.ToUpper(filter.OrderDirection) == "DESC" {
-                direction = "DESC"
-            }
-            orderClause = fmt.Sprintf(" ORDER BY %s %s", dbField, direction)
-        }
-    }
 
-    // Apply pagination after sorting
-    fullQuery := query + orderClause + " LIMIT :limit OFFSET :offset"
-    args["limit"] = pagination.PageSize
-    args["offset"] = offset
+	if filter.OrderField != "" {
+		dbField, exists := sortableFields[filter.OrderField]
+		if !exists {
+			r.logger.Warn("invalid sort field requested, using default",
+				zap.String("field", filter.OrderField))
+		} else {
+			direction := "ASC"
+			if strings.ToUpper(filter.OrderDirection) == "DESC" {
+				direction = "DESC"
+			}
+			orderClause = fmt.Sprintf(" ORDER BY %s %s", dbField, direction)
+		}
+	}
 
-    // Debug log
-    r.logger.Debug("executing query", 
-        zap.String("query", fullQuery),
-        zap.Any("args", args))
+	countQuery, countArgs, err := sqlx.Named(countQuery, args)
+	if err != nil {
+		return nil, fmt.Errorf("prepare count query: %w", err)
+	}
 
-    // Execute query with sorting and pagination
-    query, queryArgs, err := sqlx.Named(fullQuery, args)
-    if err != nil {
-        return nil, fmt.Errorf("prepare query: %w", err)
-    }
+	countQuery = r.db.Rebind(countQuery)
+	if err := r.db.GetContext(ctx, &totalItems, countQuery, countArgs...); err != nil {
+		return nil, fmt.Errorf("count applications: %w", err)
+	}
+
+
+	// Apply pagination after sorting
+	fullQuery := query + orderClause + " LIMIT :limit OFFSET :offset"
+	args["limit"] = pagination.PageSize
+	args["offset"] = offset
+
+	// Debug log
+	r.logger.Debug("executing query",
+		zap.String("query", fullQuery),
+		zap.Any("args", args))
+
+	// Execute query with sorting and pagination
+	query, queryArgs, err := sqlx.Named(fullQuery, args)
+	if err != nil {
+		return nil, fmt.Errorf("prepare query: %w", err)
+	}
 
 	query = r.db.Rebind(query)
 	var items []domain.Application
@@ -456,9 +463,83 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 		return nil, fmt.Errorf("select applications: %w", err)
 	}
 
+	headers := []domain.Header{
+		{
+			Name:         "id",
+			IsID:         true,
+			Title:        "ID",
+			IsVisible:    true,
+			IsAdditional: false,
+			Format:       "number",
+		},
+		{
+			Name:         "created_at",
+			IsID:         false,
+			Title:        "Дата",
+			IsVisible:    true,
+			IsAdditional: false,
+			Format:       "date",
+		},
+		{
+			Name:         "name",
+			IsID:         false,
+			Title:        "ФИО",
+			IsVisible:    true,
+			IsAdditional: false,
+			Format:       "string",
+		},
+		{
+			Name:         "status_name",
+			IsID:         false,
+			Title:        "Этап",
+			IsVisible:    true,
+			IsAdditional: false,
+			Format:       "enum",
+		},
+		{
+			Name:         "phone",
+			IsID:         false,
+			Title:        "Номер телефона",
+			IsVisible:    true,
+			IsAdditional: false,
+			Format:       "string",
+		},
+		{
+			Name:         "manager_name",
+			IsID:         false,
+			Title:        "Посредник",
+			IsVisible:    true,
+			IsAdditional: false,
+			Format:       "string",
+		},
+		{
+			Name:         "property_type",
+			IsID:         false,
+			Title:        "Тип недвижимости",
+			IsVisible:    true,
+			IsAdditional: false,
+			Format:       "enum",
+		},
+	}
+
+	//TODO Later: implement method for auto headers generation
+	// t := reflect.TypeOf(items[0])
+
+	// for i := 0; i < t.NumField(); i++ {
+	// 	headers = append(headers, domain.Header{
+	// 		Name:         t.Field(i).Name,
+	// 		IsID:         t.Field(i).Name == "ID",
+	// 		Title:        t.Field(i).Name,
+	// 		IsVisible:    true,
+	// 		IsAdditional: false,
+	// 		Format:       t.Field(i).Type.String(),
+	// 	})
+	// }
+
 	totalPages := int(math.Ceil(float64(totalItems) / float64(pagination.PageSize)))
 
 	return &domain.PaginationResponse{
+		Headers:    headers,
 		Items:      items,
 		TotalItems: totalItems,
 		TotalPages: totalPages,
@@ -468,7 +549,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 }
 
 func (r *MySQLAudienceRepository) ExportApplicationsWithFilters(ctx context.Context, filter *domain.ApplicationFilterRequest) ([]domain.Application, error) {
-    baseQuery := `
+	baseQuery := `
         SELECT 
             eb.id AS id,
             eb.date_added AS date_added,
@@ -491,26 +572,26 @@ func (r *MySQLAudienceRepository) ExportApplicationsWithFilters(ctx context.Cont
         LEFT JOIN estate_houses h ON h.id = eb.house_id
         WHERE eb.company_id = 528`
 
-    whereConditions := []string{}
-    var args []interface{}
+	whereConditions := []string{}
+	var args []interface{}
 
-    if filter.Status != "" {
-        whereConditions = append(whereConditions, "eb.status_name = ?")
-        args = append(args, filter.Status)
-    }
+	if filter.Status != "" {
+		whereConditions = append(whereConditions, "eb.status_name = ?")
+		args = append(args, filter.Status)
+	}
 
-    if filter.PropertyType != "" {
-        whereConditions = append(whereConditions, "eb.category = ?")
-        args = append(args, filter.PropertyType)
-    }
+	if filter.PropertyType != "" {
+		whereConditions = append(whereConditions, "eb.category = ?")
+		args = append(args, filter.PropertyType)
+	}
 
-    if filter.ProjectName != "" {
-        whereConditions = append(whereConditions, "h.complex_name LIKE ?")
-        args = append(args, "%"+filter.ProjectName+"%")
-    }
+	if filter.ProjectName != "" {
+		whereConditions = append(whereConditions, "h.complex_name LIKE ?")
+		args = append(args, "%"+filter.ProjectName+"%")
+	}
 
-    if filter.StatusDuration > 0 {
-        whereConditions = append(whereConditions, `
+	if filter.StatusDuration > 0 {
+		whereConditions = append(whereConditions, `
             DATEDIFF(NOW(), COALESCE(
                 (SELECT MAX(log_date) 
                 FROM estate_buys_statuses_log 
@@ -519,191 +600,172 @@ func (r *MySQLAudienceRepository) ExportApplicationsWithFilters(ctx context.Cont
                 eb.date_added
             )) >= ?
         `)
-        args = append(args, filter.StatusDuration)
-    }
+		args = append(args, filter.StatusDuration)
+	}
 
-    if len(whereConditions) > 0 {
-        baseQuery += " AND " + strings.Join(whereConditions, " AND ")
-    }
+	if filter.CreatedAtFrom != nil && filter.CreatedAtTo != nil {
+		whereConditions = append(whereConditions, "eb.date_added >= ?")
+		args = append(args, filter.CreatedAtFrom)
+		whereConditions = append(whereConditions, "eb.date_added <= ?")
+		args = append(args, filter.CreatedAtTo)
 
-    orderClause := " ORDER BY eb.date_added DESC"
-    if filter.OrderField != "" {
-        sortableFields := map[string]string{
-            "id":           "eb.id",
-            "created_date": "eb.date_added",
-            "client_name":  "edc.contacts_buy_name",
-            "status":       "eb.status_name",
-            "phone":        "edc.contacts_buy_phones",
-            "manager":      "u.users_name",
-            "property":     "eb.category",
-        }
+	}
 
-        if dbField, exists := sortableFields[filter.OrderField]; exists {
-            direction := "ASC"
-            if strings.ToUpper(filter.OrderDirection) == "DESC" {
-                direction = "DESC"
-            }
-            orderClause = fmt.Sprintf(" ORDER BY %s %s", dbField, direction)
-        } else {
-            r.logger.Warn("invalid sort field requested, using default", 
-                zap.String("field", filter.OrderField))
-        }
-    }
+	if len(whereConditions) > 0 {
+		baseQuery += " AND " + strings.Join(whereConditions, " AND ")
+	}
 
-    fullQuery := baseQuery + orderClause
+	orderClause := " ORDER BY eb.date_added DESC"
+	if filter.OrderField != "" {
+		sortableFields := map[string]string{
+			"id":           "eb.id",
+			"created_date": "eb.date_added",
+			"client_name":  "edc.contacts_buy_name",
+			"status":       "eb.status_name",
+			"phone":        "edc.contacts_buy_phones",
+			"manager":      "u.users_name",
+			"property":     "eb.category",
+		}
 
-    r.logger.Debug("executing export query",
-        zap.String("query", fullQuery),
-        zap.Any("args", args))
+		if dbField, exists := sortableFields[filter.OrderField]; exists {
+			direction := "ASC"
+			if strings.ToUpper(filter.OrderDirection) == "DESC" {
+				direction = "DESC"
+			}
+			orderClause = fmt.Sprintf(" ORDER BY %s %s", dbField, direction)
+		} else {
+			r.logger.Warn("invalid sort field requested, using default",
+				zap.String("field", filter.OrderField))
+		}
+	}
 
-    var applications []domain.Application
-    if err := r.db.SelectContext(ctx, &applications, fullQuery, args...); err != nil {
-        return nil, fmt.Errorf("select applications for export: %w", err)
-    }
+	fullQuery := baseQuery + orderClause
 
-    r.logger.Info("applications exported successfully",
-        zap.Int("count", len(applications)))
+	r.logger.Debug("executing export query",
+		zap.String("query", fullQuery),
+		zap.Any("args", args))
 
-    return applications, nil
+	var applications []domain.Application
+	if err := r.db.SelectContext(ctx, &applications, fullQuery, args...); err != nil {
+		return nil, fmt.Errorf("select applications for export: %w", err)
+	}
+
+	r.logger.Info("applications exported successfully",
+		zap.Int("count", len(applications)))
+
+	return applications, nil
 }
 
 func (r *MySQLAudienceRepository) GetRegionsData(ctx context.Context, filter *domain.RegionFilter) (*domain.RegionsResponse, error) {
-    // Get unique regions from correct column
+	// Get unique cities using regexp
     regionsQuery := `
-        SELECT DISTINCT passport_bithplace 
-        FROM estate_deals_contacts 
-        WHERE passport_bithplace IS NOT NULL AND passport_bithplace != ''
-        ORDER BY passport_bithplace
-    `
-    
-    var regions []string
-    if err := r.db.SelectContext(ctx, &regions, regionsQuery); err != nil {
-        return nil, fmt.Errorf("get regions: %w", err)
+        SELECT DISTINCT 
+            TRIM(REGEXP_SUBSTR(passport_address, '(?i)\\s*г\\.?\\s*([а-яА-Я]+)')) as city
+        FROM estate_deals_contacts
+        WHERE passport_address IS NOT NULL 
+        AND passport_address != ''
+        AND passport_address REGEXP '(?i)\\s*г\\.?\\s*[а-яА-Я]+'
+        ORDER BY city
+`
+
+	var regions []string
+	if err := r.db.SelectContext(ctx, &regions, regionsQuery); err != nil {
+		return nil, fmt.Errorf("get regions: %w", err)
+	}
+
+	// Build base query with city extraction
+	query := `
+ 	SELECT 
+	 gcc.id,
+	 gcc.geo_complex_name as name_of_projects`
+
+	// Add columns for each city count
+	for _, region := range regions {
+        query += fmt.Sprintf(`,
+            COUNT(CASE 
+                WHEN TRIM(REGEXP_SUBSTR(edc.passport_address, '(?i)\\s*г\\.?\\s*([а-яА-Я]+)')) = TRIM(?) 
+                AND (eb.status_name = 'Сделка проведена' OR eb.status_name = 'Бронь')
+                THEN 1 
+            END) as %s`, sanitizeColumnName(region))
     }
 
-    // Build dynamic query
-    baseQuery := `
-        SELECT 
-            gcc.id,
-            gcc.geo_complex_name as name,
-    `
-    
-    // Add dynamic CASE statements for each region
-    caseClauses := []string{}
-    for i := 0; i < len(regions); i++ {
-        caseClauses = append(caseClauses, fmt.Sprintf(`
-            COUNT(CASE WHEN passport_bithplace = ? THEN 1 END) as region%d`,
-            i+1))
-    }
-
-    query := baseQuery + strings.Join(caseClauses, ",") + `
+	query += `
         FROM geo_city_complex gcc
         LEFT JOIN estate_houses h ON h.complex_id = gcc.geo_complex_id
-		LEFT JOIN estate_deals_contacts edc ON edc.id = h.contacts_id
+        LEFT JOIN estate_buys eb ON eb.house_id = h.id
+        LEFT JOIN estate_deals_contacts edc ON eb.contacts_id = edc.id
         WHERE gcc.company_id = 528
+        GROUP BY gcc.id, gcc.geo_complex_name
+        ORDER BY gcc.geo_complex_name
     `
 
-    args := []interface{}{}
-    // Add region args
-    for _, region := range regions {
-        args = append(args, region)
-    }
+	// Debug log
+	r.logger.Debug("query structure",
+		zap.String("query", query),
+		zap.Strings("regions", regions))
 
-    // Add filters
-    if filter.Search != "" {
-        query += " AND gcc.geo_complex_name LIKE ?"
-        args = append(args, "%"+filter.Search+"%")
-    }
+	// Prepare args with regions
+	args := make([]interface{}, len(regions))
+	for i, region := range regions {
+		args[i] = region
+	}
 
-    if filter.StartDate != nil {
-        query += " AND h.updated_at >= ?"
-        args = append(args, filter.StartDate)
-    }
+	// Execute query
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("execute query: %w", err)
+	}
+	defer rows.Close()
 
-    if filter.EndDate != nil {
-        query += " AND h.updated_at <= ?"
-        args = append(args, filter.EndDate)
-    }
+	// Create headers
+	headers := make([]domain.Header, 0, len(regions))
+	for _, region := range regions {
+		headers = append(headers, domain.Header{
+			Name:         region,
+			Title:        region,
+			IsVisible:    true,
+			IsAdditional: true,
+			Format:       "number",
+		})
+	}
 
-    query += " GROUP BY gcc.id, gcc.geo_complex_name"
+	// Scan rows
+	var data []map[string]interface{}
+    footer := make(map[string]int)
 
-    // Add sorting
-    if filter.Sort != "" {
-        parts := strings.Split(filter.Sort, "_")
-        if len(parts) == 2 {
-            sortableFields := map[string]string{
-                "name":    "gcc.geo_complex_name",
-            }
-            
-            field := parts[0]
-            direction := strings.ToUpper(parts[1])
-            
-            if dbField, exists := sortableFields[field]; exists && (direction == "ASC" || direction == "DESC") {
-                query += fmt.Sprintf(" ORDER BY %s %s", dbField, direction)
-            }
-        }
-    } else {
-        query += " ORDER BY gcc.sort_order ASC, gcc.geo_complex_name ASC"
-    }
-
-    // Debug log
-    r.logger.Debug("executing query", 
-        zap.String("query", query),
-        zap.Any("args", args))
-
-	print(query)
-
-    // Execute query
-    rows, err := r.db.QueryContext(ctx, query, args...)
-    if err != nil {
-        return nil, fmt.Errorf("execute query: %w", err)
-    }
-    defer rows.Close()
-
-    // Process results
-    var data []domain.RegionData
-    footer := domain.RegionData{
-        NameOfProject: "Общее",
-        RegionCounts:  make(map[int]int),
-    }
-
-    for rows.Next() {
-        var item domain.RegionData
-        item.RegionCounts = make(map[int]int)
-        
-        scanArgs := []interface{}{&item.ID, &item.NameOfProject}
-        for i := range regions {
-            var count int
-            scanArgs = append(scanArgs, &count)
-            item.RegionCounts[i+1] = count
-        }
-        
-        if err := rows.Scan(scanArgs...); err != nil {
-            return nil, fmt.Errorf("scan row: %w", err)
-        }
-        
-        // Update footer totals
-        for region, count := range item.RegionCounts {
-            footer.RegionCounts[region] += count
-        }
-        
-        data = append(data, item)
-    }
-
-    // Create headers
-    headers := []domain.Header{
-        {Name: "id", IsID: true, Title: "№", IsVisible: false, IsAdditional: false, Format: "number"},
-        {Name: "name_of_projects", Title: "Наименование проектов", IsVisible: true, IsAdditional: false, Format: "string"},
-    }
-
-    for i, region := range regions {
-        headers = append(headers, domain.Header{
-            Name:         fmt.Sprintf("region%d", i+1),
-            Title:        region,
-            IsVisible:    true,
-            IsAdditional: true,
-            Format:       "number",
-        })
+	for rows.Next() {
+		var id int
+		var name string
+		rowData := make(map[string]interface{})
+		
+		values := make([]interface{}, 2+len(regions))
+		values[0] = &id
+		values[1] = &name
+	
+		// Prepare scan destinations for region counts
+		for i := range regions {
+			var count int
+			values[i+2] = &count
+		}
+	
+		// Scan row data
+		if err := rows.Scan(values...); err != nil {
+			return nil, fmt.Errorf("scan row: %w", err)
+		}
+	
+		// Add ID and name to row data
+		rowData["id"] = id
+		rowData["name_of_projects"] = name
+	
+		// Add region counts to row data and update footer
+		for i, region := range regions {
+			count := *values[i+2].(*int)
+			regionKey := fmt.Sprintf(region, i+1)
+			rowData[regionKey] = count
+			footer[regionKey] += count
+		}
+	
+		data = append(data, rowData)
     }
 
     return &domain.RegionsResponse{
@@ -711,4 +773,11 @@ func (r *MySQLAudienceRepository) GetRegionsData(ctx context.Context, filter *do
         Data:    data,
         Footer:  footer,
     }, nil
+}
+
+func sanitizeColumnName(name string) string {
+	// Replace non-alphanumeric chars with underscore
+	reg := regexp.MustCompile(`[^a-zA-Z0-9_]`)
+	safe := reg.ReplaceAllString(name, "_")
+	return fmt.Sprintf("region_%s", safe)
 }
