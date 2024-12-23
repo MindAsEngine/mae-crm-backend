@@ -6,6 +6,19 @@ import (
 	//"github.com/google/uuid"
 )
 
+type ApplicationFilterRequest struct {
+	OrderField     string 	  `json:"order_field"`
+	OrderDirection string 	  `json:"order_direction"`
+	Status         string 	  `json:"status_name" form:"status_name"`
+	StatusDuration int  	  `json:"status_duration,omitempty" form:"status_duration"`
+	ProjectName    string 	  `json:"project_name" form:"project_name"`
+	PropertyType   string 	  `json:"property_type" form:"property_type"`
+	AudienceName   string 	  `json:"audience_name" form:"audience_name"`
+	CreatedAtFrom  *time.Time `json:"created_at_from" form:"created_at_from"`
+	CreatedAtTo    *time.Time `json:"created_at_to" form:"created_at_to"`
+	DeadlinePassed bool       `json:"deadline_passed" form:"deadline_passed"`
+}
+
 type AudienceMessage struct {
 	CurrentChunk    int           `json:"current_chunk"`
 	TotalChunks     int           `json:"total_chunks"`

@@ -329,12 +329,30 @@ func (r *PostgresAudienceRepository) UpdateApplicationsForAudience(ctx context.C
 
 func (r *PostgresAudienceRepository) Delete(ctx context.Context, id int64) error {
 	query := `
+	DELETE FROM integrations
+	WHERE audience_id = $1`
+	
+	result, err := r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("execute delete integrations: %w", err)
+	}
+	
+	query = `
+	DELETE FROM audience_requests
+	WHERE audience_id = $1`
+
+	result, err = r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("execute delete audience_requests: %w", err)
+	}
+
+	query = `
         DELETE FROM audiences 
         WHERE id = $1`
 
-	result, err := r.db.ExecContext(ctx, query, id)
+	result, err = r.db.ExecContext(ctx, query, id)
 	if err != nil {
-		return fmt.Errorf("execute delete: %w", err)
+		return fmt.Errorf("execute delete audiences: %w", err)
 	}
 
 	affected, err := result.RowsAffected()

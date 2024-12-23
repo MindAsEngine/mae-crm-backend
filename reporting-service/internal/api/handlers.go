@@ -35,7 +35,7 @@ func NewHandler(audienceService *audience.Service, logger *zap.Logger) *Handler 
 func (h *Handler) RegisterRoutes(r *mux.Router) {
 	api := r.PathPrefix("/api").Subrouter()
 
-    api.HandleFunc("/applications/filters", h.GetAudienceFilters).Methods(http.MethodGet)
+	api.HandleFunc("/applications/filters", h.GetAudienceFilters).Methods(http.MethodGet)
 	// Audiences endpoints
 	api.HandleFunc("/audiences", h.GetAudiences).Methods(http.MethodGet)
 	api.HandleFunc("/audiences", h.CreateAudience).Methods(http.MethodPost)
@@ -45,20 +45,20 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 	api.HandleFunc("/audiences/{audienceId}/disconnect", h.DisconnectAudience).Methods(http.MethodDelete)
 	api.HandleFunc("/audiences/{audienceId}/export", h.ExportAudience).Methods(http.MethodGet)
 	api.HandleFunc("/applications", h.ListApplications).Methods(http.MethodGet)
-    api.HandleFunc("/applications/export", h.ExportApplications).Methods(http.MethodGet)
-    api.HandleFunc("/regions", h.GetRegions).Methods(http.MethodGet)
+	api.HandleFunc("/applications/export", h.ExportApplications).Methods(http.MethodGet)
+	api.HandleFunc("/regions", h.GetRegions).Methods(http.MethodGet)
 }
 
 func (h *Handler) GetAudienceFilters(w http.ResponseWriter, r *http.Request) {
-    ctx := r.Context()
+	ctx := r.Context()
 
-    filters, err := h.audienceService.GetFilters(ctx)
-    if err != nil {
-        h.errorResponse(w, "failed to get audience filters: "+err.Error(), err, http.StatusInternalServerError)
-        return
-    }
+	filters, err := h.audienceService.GetFilters(ctx)
+	if err != nil {
+		h.errorResponse(w, "failed to get audience filters: "+err.Error(), err, http.StatusInternalServerError)
+		return
+	}
 
-    h.jsonResponse(w, filters, http.StatusOK)
+	h.jsonResponse(w, filters, http.StatusOK)
 }
 
 func (h *Handler) GetAudiences(w http.ResponseWriter, r *http.Request) {
@@ -209,6 +209,23 @@ func (h *Handler) ListApplications(w http.ResponseWriter, r *http.Request) {
 		pagination.PageSize = size
 	}
 
+	time_from := time.Time{}
+	time_to := time.Time{}
+    err:= error(nil)
+	if r.URL.Query().Get("start_date") != "" {
+		time_from, err = time.Parse(time.RFC3339, r.URL.Query().Get("start_date"))
+		if err != nil  {
+			h.errorResponse(w, "invalid date_from format", err, http.StatusBadRequest)
+			return
+		}
+	}
+	if r.URL.Query().Get("end_date") != "" {
+		time_to, err = time.Parse(time.RFC3339, r.URL.Query().Get("end_date"))
+		if err != nil {
+			h.errorResponse(w, "invalid date_to format", err, http.StatusBadRequest)
+			return
+		}
+	}
 	filter := &domain.ApplicationFilterRequest{
 		OrderField:     r.URL.Query().Get("order_field"),
 		OrderDirection: r.URL.Query().Get("order_direction"),
@@ -216,6 +233,10 @@ func (h *Handler) ListApplications(w http.ResponseWriter, r *http.Request) {
 		ProjectName:    r.URL.Query().Get("project_name"),
 		PropertyType:   r.URL.Query().Get("property_type"),
 	}
+	if !time_from.IsZero() && !time_to.IsZero() {
+		filter.CreatedAtFrom = &time_from
+		filter.CreatedAtTo = &time_to
+	} 
 
 	if daysInStatus := r.URL.Query().Get("days_in_status"); daysInStatus != "" {
 		if days, err := strconv.Atoi(daysInStatus); err == nil {
@@ -233,27 +254,48 @@ func (h *Handler) ListApplications(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ExportApplications(w http.ResponseWriter, r *http.Request) {
-    ctx := r.Context()
+	ctx := r.Context()
 
-    // vars := mux.Vars(r)
+	// vars := mux.Vars(r)
+	time_from := time.Time{}
+	time_to := time.Time{}
+    err:= error(nil)
+	if r.URL.Query().Get("start_date") != "" {
+		time_from, err = time.Parse(time.RFC3339, r.URL.Query().Get("start_date"))
+		if err != nil {
+			h.errorResponse(w, "invalid date_from format", err, http.StatusBadRequest)
+			return
+		}
+	}
+	if r.URL.Query().Get("end_date") != "" {
+		time_to, err = time.Parse(time.RFC3339, r.URL.Query().Get("end_date"))
+		if err != nil {
+			h.errorResponse(w, "invalid date_to format", err, http.StatusBadRequest)
+			return
+		}
+	}
+	// Parse filter parameters
+	filter := &domain.ApplicationFilterRequest{
+		OrderField:     r.URL.Query().Get("order_field"),
+		OrderDirection: r.URL.Query().Get("order_direction"),
+		Status:         r.URL.Query().Get("status"),
+		ProjectName:    r.URL.Query().Get("project_name"),
+		PropertyType:   r.URL.Query().Get("property_type"),
+	}
+	if !time_from.IsZero() && !time_to.IsZero() {
+		filter.CreatedAtFrom = &time_from
+		filter.CreatedAtTo = &time_to
+	} 
 
-    // Parse filter parameters
-    filter := &domain.ApplicationFilterRequest{
-        Status:         r.URL.Query().Get("status"),
-        PropertyType:   r.URL.Query().Get("property_type"),
-        ProjectName:    r.URL.Query().Get("project_name"),
-        OrderField:     r.URL.Query().Get("order_field"),
-        OrderDirection: r.URL.Query().Get("order_direction"),
-    }
 
-    // Parse days_in_status if provided
-    if daysStr := r.URL.Query().Get("days_in_status"); daysStr != "" {
-        if days, err := strconv.Atoi(daysStr); err == nil {
-            filter.StatusDuration = days
-        } else {
-            h.logger.Warn("invalid days_in_status parameter", zap.Error(err))
-        }
-    }
+	// Parse days_in_status if provided
+	if daysStr := r.URL.Query().Get("days_in_status"); daysStr != "" {
+		if days, err := strconv.Atoi(daysStr); err == nil {
+			filter.StatusDuration = days
+		} else {
+			h.logger.Warn("invalid days_in_status parameter", zap.Error(err))
+		}
+	}
 
 	filePath, fileName, err := h.audienceService.ExportApplications(ctx, *filter)
 	if err != nil {
@@ -267,38 +309,38 @@ func (h *Handler) ExportApplications(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetRegions(w http.ResponseWriter, r *http.Request) {
-    ctx := r.Context()
+	ctx := r.Context()
 
-    filter := &domain.RegionFilter{
-        Search: r.URL.Query().Get("search"),
-        Sort:   r.URL.Query().Get("sort"),
-    }
+	filter := &domain.RegionFilter{
+		Search: r.URL.Query().Get("search"),
+		Sort:   r.URL.Query().Get("sort"),
+	}
 
-    if startDate := r.URL.Query().Get("startDate"); startDate != "" {
-        date, err := time.Parse(time.RFC3339, startDate)
-        if err != nil {
-            h.errorResponse(w, "invalid start date format", err, http.StatusBadRequest)
-            return
-        }
-        filter.StartDate = &date
-    }
+	if startDate := r.URL.Query().Get("startDate"); startDate != "" {
+		date, err := time.Parse(time.RFC3339, startDate)
+		if err != nil {
+			h.errorResponse(w, "invalid start date format", err, http.StatusBadRequest)
+			return
+		}
+		filter.StartDate = &date
+	}
 
-    if endDate := r.URL.Query().Get("endDate"); endDate != "" {
-        date, err := time.Parse(time.RFC3339, endDate)
-        if err != nil {
-            h.errorResponse(w, "invalid end date format", err, http.StatusBadRequest)
-            return
-        }
-        filter.EndDate = &date
-    }
+	if endDate := r.URL.Query().Get("endDate"); endDate != "" {
+		date, err := time.Parse(time.RFC3339, endDate)
+		if err != nil {
+			h.errorResponse(w, "invalid end date format", err, http.StatusBadRequest)
+			return
+		}
+		filter.EndDate = &date
+	}
 
-    response, err := h.audienceService.GetRegions(ctx, filter)
-    if err != nil {
-        h.errorResponse(w, "failed to get regions data", err, http.StatusInternalServerError)
-        return
-    }
+	response, err := h.audienceService.GetRegions(ctx, filter)
+	if err != nil {
+		h.errorResponse(w, "failed to get regions data", err, http.StatusInternalServerError)
+		return
+	}
 
-    h.jsonResponse(w, response, http.StatusOK)
+	h.jsonResponse(w, response, http.StatusOK)
 }
 
 func (h *Handler) errorResponse(w http.ResponseWriter, message string, err error, code int) {
