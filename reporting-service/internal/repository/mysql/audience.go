@@ -32,7 +32,7 @@ func NewMySQLAudienceRepository(db *sqlx.DB) *MySQLAudienceRepository {
 	}
 }
 
-func validateAudienceFilter(filter domain.AudienceFilter) []ValidationError {
+func validateAudienceFilter(filter domain.AudienceCreationFilter) []ValidationError {
 	var errors []ValidationError
 
 	// Date range validation
@@ -62,7 +62,27 @@ func validateAudienceFilter(filter domain.AudienceFilter) []ValidationError {
 	return errors
 }
 
-func (r *MySQLAudienceRepository) GetApplicationsByAudienceFilter(ctx context.Context, filter domain.AudienceFilter) ([]domain.Application, error) {
+func (r *MySQLAudienceRepository) GetFilters(ctx context.Context) (domain.ApplicationFilterResponce, error) {
+	var filter domain.ApplicationFilterResponce
+
+	query := `SELECT Distinct status_name FROM macro_bi_cmp_528.estate_buys`
+	if err := r.db.SelectContext(ctx, &filter.Statuses, query); err != nil {
+		return domain.ApplicationFilterResponce{}, fmt.Errorf("select filters: %w", err)
+	}
+	query = `SELECT Distinct geo_complex_name FROM macro_bi_cmp_528.geo_city_complex`
+	if err := r.db.SelectContext(ctx, &filter.ProjectNames, query); err != nil {
+		return domain.ApplicationFilterResponce{}, fmt.Errorf("select filters: %w", err)
+	}
+	query = `SELECT Distinct category FROM macro_bi_cmp_528.estate_buys WHERE category != ''`
+	if err := r.db.SelectContext(ctx, &filter.PropertyTypes, query); err != nil {
+		return domain.ApplicationFilterResponce{}, fmt.Errorf("select filters: %w", err)
+	}
+	return filter, nil
+
+}
+
+
+func (r *MySQLAudienceRepository) GetApplicationsByAudienceFilter(ctx context.Context, filter domain.AudienceCreationFilter) ([]domain.Application, error) {
 	// Validate filter
 	errs := validateAudienceFilter(filter)
 	errs_string := ""
@@ -185,25 +205,6 @@ func (r *MySQLAudienceRepository) GetNewApplicationsByAudience(ctx context.Conte
 		return nil, fmt.Errorf("audience has no applications")
 	}
 
-	// Нахождение заявок которые появились после позднее последней заявки аудитории.(Не используется)
-
-	// latestDate := audience.Applications[0].ID
-
-	// for  i, app := range audience.Applications {
-	//     if app.CreatedAt.After(latestDate) {
-	//         latestDate = app.ID
-	//     }
-	// 	if 	!repository.SliceConatinsString(audience.Filter.StatusNames, app.StatusName){
-	// 		// query :=`
-	// 		// DELETE FROM audience_requests
-	// 		// WHERE audience_id = :audience_id AND request_id = :request_id
-	// 		// `
-	// 	}
-	// }
-
-	// query += " AND eb.date_added >= :last_creation_date"
-	// args["last_creation_date"] = latestDate
-
 	// Execute query
 	query, params, err := sqlx.Named(query, args)
 	if err != nil {
@@ -226,7 +227,7 @@ func (r *MySQLAudienceRepository) GetNewApplicationsByAudience(ctx context.Conte
 	return results, nil
 }
 
-func (r *MySQLAudienceRepository) GetChangedApplicationIds(ctx context.Context, filter *domain.AudienceFilter, application_ids []int64) ([]int64, error) {
+func (r *MySQLAudienceRepository) GetChangedApplicationIds(ctx context.Context, filter *domain.AudienceCreationFilter, application_ids []int64) ([]int64, error) {
 	// Build query
 	args := map[string]interface{}{}
 
@@ -309,7 +310,7 @@ func (r *MySQLAudienceRepository) ListApplicationsByIds(ctx context.Context, app
 	return results, nil
 }
 
-func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Context, pagination *domain.PaginationRequest, filter *domain.ApplicationFilter) (*domain.PaginationResponse, error) {
+func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Context, pagination *domain.PaginationRequest, filter *domain.ApplicationFilterRequest) (*domain.PaginationResponse, error) {
 	// Build base query for counting
 	countQuery := `
         SELECT COUNT(*) 
@@ -337,7 +338,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 		args["project_name"] = "%" + filter.ProjectName + "%"
 	}
 
-	if filter.DaysInStatus > 0 {
+	if filter.StatusDuration > 0 {
 		whereConditions = append(whereConditions, `
             DATEDIFF(NOW(), COALESCE(
                 (SELECT MAX(log_date) 
@@ -347,7 +348,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
                 eb.date_added
             )) >= :days_in_status
         `)
-		args["days_in_status"] = filter.DaysInStatus
+		args["days_in_status"] = filter.StatusDuration
 	}
 
 	if len(whereConditions) > 0 {
@@ -466,7 +467,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 	}, nil
 }
 
-func (r *MySQLAudienceRepository) ExportApplicationsWithFilters(ctx context.Context, filter *domain.ApplicationFilter) ([]domain.Application, error) {
+func (r *MySQLAudienceRepository) ExportApplicationsWithFilters(ctx context.Context, filter *domain.ApplicationFilterRequest) ([]domain.Application, error) {
     baseQuery := `
         SELECT 
             eb.id AS id,
@@ -508,7 +509,7 @@ func (r *MySQLAudienceRepository) ExportApplicationsWithFilters(ctx context.Cont
         args = append(args, "%"+filter.ProjectName+"%")
     }
 
-    if filter.DaysInStatus > 0 {
+    if filter.StatusDuration > 0 {
         whereConditions = append(whereConditions, `
             DATEDIFF(NOW(), COALESCE(
                 (SELECT MAX(log_date) 
@@ -518,7 +519,7 @@ func (r *MySQLAudienceRepository) ExportApplicationsWithFilters(ctx context.Cont
                 eb.date_added
             )) >= ?
         `)
-        args = append(args, filter.DaysInStatus)
+        args = append(args, filter.StatusDuration)
     }
 
     if len(whereConditions) > 0 {
@@ -564,4 +565,150 @@ func (r *MySQLAudienceRepository) ExportApplicationsWithFilters(ctx context.Cont
         zap.Int("count", len(applications)))
 
     return applications, nil
+}
+
+func (r *MySQLAudienceRepository) GetRegionsData(ctx context.Context, filter *domain.RegionFilter) (*domain.RegionsResponse, error) {
+    // Get unique regions from correct column
+    regionsQuery := `
+        SELECT DISTINCT passport_bithplace 
+        FROM estate_deals_contacts 
+        WHERE passport_bithplace IS NOT NULL AND passport_bithplace != ''
+        ORDER BY passport_bithplace
+    `
+    
+    var regions []string
+    if err := r.db.SelectContext(ctx, &regions, regionsQuery); err != nil {
+        return nil, fmt.Errorf("get regions: %w", err)
+    }
+
+    // Build dynamic query
+    baseQuery := `
+        SELECT 
+            gcc.id,
+            gcc.geo_complex_name as name,
+    `
+    
+    // Add dynamic CASE statements for each region
+    caseClauses := []string{}
+    for i := 0; i < len(regions); i++ {
+        caseClauses = append(caseClauses, fmt.Sprintf(`
+            COUNT(CASE WHEN passport_bithplace = ? THEN 1 END) as region%d`,
+            i+1))
+    }
+
+    query := baseQuery + strings.Join(caseClauses, ",") + `
+        FROM geo_city_complex gcc
+        LEFT JOIN estate_houses h ON h.complex_id = gcc.geo_complex_id
+		LEFT JOIN estate_deals_contacts edc ON edc.id = h.contacts_id
+        WHERE gcc.company_id = 528
+    `
+
+    args := []interface{}{}
+    // Add region args
+    for _, region := range regions {
+        args = append(args, region)
+    }
+
+    // Add filters
+    if filter.Search != "" {
+        query += " AND gcc.geo_complex_name LIKE ?"
+        args = append(args, "%"+filter.Search+"%")
+    }
+
+    if filter.StartDate != nil {
+        query += " AND h.updated_at >= ?"
+        args = append(args, filter.StartDate)
+    }
+
+    if filter.EndDate != nil {
+        query += " AND h.updated_at <= ?"
+        args = append(args, filter.EndDate)
+    }
+
+    query += " GROUP BY gcc.id, gcc.geo_complex_name"
+
+    // Add sorting
+    if filter.Sort != "" {
+        parts := strings.Split(filter.Sort, "_")
+        if len(parts) == 2 {
+            sortableFields := map[string]string{
+                "name":    "gcc.geo_complex_name",
+            }
+            
+            field := parts[0]
+            direction := strings.ToUpper(parts[1])
+            
+            if dbField, exists := sortableFields[field]; exists && (direction == "ASC" || direction == "DESC") {
+                query += fmt.Sprintf(" ORDER BY %s %s", dbField, direction)
+            }
+        }
+    } else {
+        query += " ORDER BY gcc.sort_order ASC, gcc.geo_complex_name ASC"
+    }
+
+    // Debug log
+    r.logger.Debug("executing query", 
+        zap.String("query", query),
+        zap.Any("args", args))
+
+	print(query)
+
+    // Execute query
+    rows, err := r.db.QueryContext(ctx, query, args...)
+    if err != nil {
+        return nil, fmt.Errorf("execute query: %w", err)
+    }
+    defer rows.Close()
+
+    // Process results
+    var data []domain.RegionData
+    footer := domain.RegionData{
+        NameOfProject: "Общее",
+        RegionCounts:  make(map[int]int),
+    }
+
+    for rows.Next() {
+        var item domain.RegionData
+        item.RegionCounts = make(map[int]int)
+        
+        scanArgs := []interface{}{&item.ID, &item.NameOfProject}
+        for i := range regions {
+            var count int
+            scanArgs = append(scanArgs, &count)
+            item.RegionCounts[i+1] = count
+        }
+        
+        if err := rows.Scan(scanArgs...); err != nil {
+            return nil, fmt.Errorf("scan row: %w", err)
+        }
+        
+        // Update footer totals
+        for region, count := range item.RegionCounts {
+            footer.RegionCounts[region] += count
+        }
+        
+        data = append(data, item)
+    }
+
+    // Create headers
+    headers := []domain.Header{
+        {Name: "id", IsID: true, Title: "№", IsVisible: false, IsAdditional: false, Format: "number"},
+        {Name: "name_of_projects", Title: "Наименование проектов", IsVisible: true, IsAdditional: false, Format: "string"},
+    }
+
+    for i, region := range regions {
+        headers = append(headers, domain.Header{
+            Name:         fmt.Sprintf("region%d", i+1),
+            Title:        region,
+            IsVisible:    true,
+            IsAdditional: true,
+            Format:       "number",
+        })
+    }
+
+    return &domain.RegionsResponse{
+        Headers: headers,
+        Data:    data,
+        Footer:  footer,
+    }, nil
 }

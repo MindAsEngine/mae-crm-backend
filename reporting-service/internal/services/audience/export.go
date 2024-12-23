@@ -171,7 +171,7 @@ func (e *ExcelExporter) ExportAudience(ctx context.Context, audienceID int64) (s
 	return filePath, fileName, nil
 }
 
-func (e *ExcelExporter) ExportApplications(ctx context.Context, filter *domain.ApplicationFilter) (string, string, error) {
+func (e *ExcelExporter) ExportApplications(ctx context.Context, filter *domain.ApplicationFilterRequest) (string, string, error) {
 	applications, err := e.mysqlRepo.ExportApplicationsWithFilters(ctx, filter)
 	if err != nil {
 		return "", "", fmt.Errorf("get applications: %w", err)

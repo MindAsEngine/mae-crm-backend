@@ -138,14 +138,14 @@ func (r *PostgresAudienceRepository) GetByID(ctx context.Context, id int64) (*do
 	return audience, nil
 }
 
-func (r *PostgresAudienceRepository) GetFilterByAudienceId(ctx context.Context, audience_id int64) (*domain.AudienceFilter, error) {
+func (r *PostgresAudienceRepository) GetFilterByAudienceId(ctx context.Context, audience_id int64) (*domain.AudienceCreationFilter, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	var filter domain.AudienceFilter
+	var filter domain.AudienceCreationFilter
 
 	query := `
     SELECT 
@@ -210,6 +210,17 @@ func (r *PostgresAudienceRepository) CreateIntegration(ctx context.Context, inte
 		return fmt.Errorf("update audience timestamp: %w", err)
 	}
 	return tx.Commit()
+}
+
+func (r *PostgresAudienceRepository) ListAudiencenames(ctx context.Context) ([]string, error) {
+	var names []string
+	query := `SELECT distinct name FROM audiences`
+
+	if err := r.db.SelectContext(ctx, &names, query); err != nil {
+		return names, fmt.Errorf("select names: %w", err)
+	}
+
+	return names, nil
 }
 
 func (r *PostgresAudienceRepository) List(ctx context.Context) ([]domain.Audience, error) {

@@ -24,14 +24,17 @@ type Application struct {
 	StatusDuration int64     `json:"days_in_status" db:"days_in_status"`
 }
 
-type ApplicationFilter struct {
-	OrderField     string `json:"order_field"`
-	OrderDirection string `json:"order_direction"`
-	Status         string `json:"status_name" form:"status_name"`
-	StatusDuration int64  `json:"status_duration,omitempty" db:"status_duration"`
-	ProjectName    string `json:"project_name" form:"project_name"`
-	DaysInStatus   int    `json:"days_in_status" form:"days_in_status"`
-	PropertyType   string `json:"property_type" form:"property_type"`
+type ApplicationFilterRequest struct {
+	OrderField     string 	  `json:"order_field"`
+	OrderDirection string 	  `json:"order_direction"`
+	Status         string 	  `json:"status_name" form:"status_name"`
+	StatusDuration int  	  `json:"status_duration,omitempty" form:"status_duration"`
+	ProjectName    string 	  `json:"project_name" form:"project_name"`
+	PropertyType   string 	  `json:"property_type" form:"property_type"`
+	AudienceName   string 	  `json:"audience_name" form:"audience_name"`
+	CreatedAtFrom  *time.Time `json:"created_at_from" form:"created_at_from"`
+	CreatedAtTo    *time.Time `json:"created_at_to" form:"created_at_to"`
+	DeadlinePassed bool       `json:"deadline_passed" form:"deadline_passed"`
 }
 
 type Audience struct {
@@ -43,7 +46,7 @@ type Audience struct {
 	Applications     []Application  `json:"requests" db:"requests"`
 	Integrations     []Integration  `json:"integrations" db:"integrations"`
 	IntegrationNames []string       `json:"integration_names" db:"integration_names"`
-	Filter           AudienceFilter `json:"filter" db:"filter"`
+	Filter           AudienceCreationFilter `json:"filter" db:"filter"`
 }
 
 type Integration struct {

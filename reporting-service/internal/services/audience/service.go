@@ -86,6 +86,22 @@ func (s *Service) setupRabbitMQ() error {
 	)
 }
 
+func (s *Service) GetFilters(ctx context.Context) (domain.ApplicationFilterResponce, error) {
+	filter := domain.ApplicationFilterResponce{}
+	
+	filter, err := s.mysqlRepo.GetFilters(ctx)
+
+	if err != nil {
+		return domain.ApplicationFilterResponce{}, fmt.Errorf("get filters: %w", err)
+	} 
+
+	filter.AudienceNames, err = s.audienceRepo.ListAudiencenames(ctx)
+	if  err != nil {
+		return domain.ApplicationFilterResponce{}, fmt.Errorf("get filters: %w", err)
+	}
+	return filter, nil
+}
+
 func (s *Service) GetById(ctx context.Context, id int64) (*domain.AudienceResponse, error) {
 	audience, err := s.audienceRepo.GetByID(ctx, id)
 
@@ -203,7 +219,7 @@ func (s *Service) UpdateAudience(ctx context.Context, id int64, application_ids 
 	return nil
 }
 
-func (s *Service) ListApplications(ctx context.Context, pagination *domain.PaginationRequest, filter *domain.ApplicationFilter) (*domain.PaginationResponse, error) {
+func (s *Service) ListApplications(ctx context.Context, pagination *domain.PaginationRequest, filter *domain.ApplicationFilterRequest) (*domain.PaginationResponse, error) {
 	response, err := s.mysqlRepo.ListApplicationsWithFilters(ctx, pagination, filter)
 	if err != nil {
 		return nil, fmt.Errorf("get applications: %w", err)
@@ -229,7 +245,7 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 		}
 		s.logger.Info("filter", zap.Any("filter", filter))
 
-		audience.Filter = domain.AudienceFilter{
+		audience.Filter = domain.AudienceCreationFilter{
 			CreationDateFrom:     filter.CreationDateFrom,
 			CreationDateTo:       filter.CreationDateTo,
 			StatusNames:          filter.StatusNames,
@@ -332,7 +348,7 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 	return nil
 }
 
-func (s *Service) ExportApplications(ctx context.Context, filter domain.ApplicationFilter) (string, string, error) {
+func (s *Service) ExportApplications(ctx context.Context, filter domain.ApplicationFilterRequest) (string, string, error) {
 	return s.exporter.ExportApplications(ctx, &filter)
 }
 
@@ -379,6 +395,31 @@ func (s *Service) pushAudienceToRabbit(ctx context.Context, audience *domain.Aud
 			zap.Int("request_count", len(audience.Applications)))
 	}
 	return nil
+}
+
+func (s *Service) GetRegions(ctx context.Context, filter *domain.RegionFilter) (*domain.RegionsResponse, error) {
+    s.logger.Info("getting regions data",
+        zap.String("search", filter.Search),
+        zap.Time("start_date", *filter.StartDate),
+        zap.Time("end_date", *filter.EndDate),
+        zap.String("sort", filter.Sort))
+
+    response, err := s.mysqlRepo.GetRegionsData(ctx, filter)
+    if err != nil {
+        return nil, fmt.Errorf("get regions data: %w", err)
+    }
+
+    // Validate response
+    if len(response.Data) == 0 {
+        s.logger.Warn("no regions data found")
+        return response, nil
+    }
+
+    s.logger.Info("got regions data",
+        zap.Int("total_projects", len(response.Data)),
+        zap.Int("total_regions", len(response.Headers)-2))
+
+    return response, nil
 }
 
 func splitIntoChunks(ids []int64, chunkSize int) [][]int64 {
