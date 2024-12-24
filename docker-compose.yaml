@@ -123,6 +123,11 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "node_health_check"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   # Elasticsearch
   # elasticsearch:

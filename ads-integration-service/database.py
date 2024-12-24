@@ -1,36 +1,45 @@
+import time
+
 import mysql.connector
-from datetime import datetime
-import pandas as pd
-from tabulate import tabulate
+import os
+from dotenv import load_dotenv
+from logger import logger
 
 
 def connect_to_database():
-    return mysql.connector.connect(
-        host="localhost",
-        user="user",
-        password="password",
-        database="macro_bi_cmp_528",
-        port=3306
-    )
+    load_dotenv()
+    while True:
+        try:
+            return mysql.connector.connect(
+                host=os.getenv("MYSQL_HOST"),
+                user=os.getenv("MYSQL_USER"),
+                password=os.getenv("MYSQL_PASSWORD"),
+                database=os.getenv("MYSQL_DATABASE"),
+                port=os.getenv("MYSQL_PORT")
+            )
+
+        except mysql.connector.Error as err:
+            print(f"Соединение с базой данных не установлено: {err}. Попробую снова через 5 секунд.")
+            logger.error(f"Соединение с базой данных не установлено: {err}. Попробую снова через 5 секунд.")
+            time.sleep(5)
+
 
 
 def get_applications_by_id(application_ids):
     try:
         conn = connect_to_database()
+        logger.info("Соединение с базой данных установлено")
         cursor = conn.cursor(dictionary=True)
         
         query_parameterized = """
-        SELECT 
-            eb.id,
-            eb.date_added,
-            eb.date_modified,
-            eb.status_name,
-            eb.status_reason_id,
-            ebrs.name as reason_name
-        FROM estate_buys eb
-        LEFT JOIN estate_statuses_reasons ebrs 
-            ON ebrs.status_reason_id = eb.status_reason_id
-        WHERE eb.id IN (%s)
+        SELECT deals.contacts_buy_sex, deals.contacts_buy_dob, deals.contacts_buy_name, 
+         deals.name_first, deals.name_last, deals.name_middle,
+        deals.contacts_buy_phones, deals.contacts_buy_emails, buys.contacts_buy_geo_country_name,
+        buys.contacts_buy_geo_city_name, buys.contacts_id
+        FROM macro_bi_cmp_528.estate_deals_contacts as deals 
+        inner join macro_bi_cmp_528.estate_buys as buys 
+        on buys.contacts_id = deals.id
+        WHERE buys.id IN (%s)
         """
         # Format as: (%s,%s,%s) for the number of ids
         in_format = ','.join(['%s'] * len(application_ids))
@@ -38,22 +47,15 @@ def get_applications_by_id(application_ids):
         
         cursor.execute(query_parameterized, tuple(application_ids))
         results = cursor.fetchall()
-        
-        # Convert to pandas DataFrame for better output
-        df = pd.DataFrame(results)
-        
-        # Format datetime columns
-        date_columns = ['date_added', 'date_modified']
-        for col in date_columns:
-            df[col] = df[col].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S'))
-            
-        print("\nQuery Results:")
-        print(tabulate(df, headers='keys', tablefmt='psql'))
-        
-        print(f"\nTotal rows: {len(results)}")
-        
+        print("Данные из базы данных получены")
+        logger.info("Данные из базы данных получены")
+        conn.close()
+        return results
     except mysql.connector.Error as err:
-        print(f"Database error: {err}")
-    finally:
-        if 'conn' in locals():
-            conn.close()
+        print(f"Ошибка при получении данных из базы данных: {err}")
+        logger.error(f"Ошибка при получении данных из базы данных: {err}")
+
+
+
+if __name__ == "__main__":
+    get_applications_by_id([4953867,4953925,4953927])
