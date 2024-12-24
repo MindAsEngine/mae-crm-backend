@@ -422,6 +422,68 @@ func (s *Service) GetRegions(ctx context.Context, filter *domain.RegionFilter) (
     return response, nil
 }
 
+func (s *Service) GetCallCenterReport(ctx context.Context, filter *domain.CallCenterReportFilter) (*domain.CallCenterReport, error) {
+    s.logger.Info("getting call center report", 
+        )
+
+    report, err := s.mysqlRepo.GetCallCenterReportData(ctx, filter)
+    if err != nil {
+        return nil, fmt.Errorf("get call center report: %w", err)
+    }
+
+    // Process anomalies
+    report.Anomalies = s.detectAnomalies(report.Data)
+
+    return report, nil
+}
+
+func (s *Service) ExportSalesReport(ctx context.Context, filter *domain.CallCenterReportFilter) (string, string, error) {
+    s.logger.Info("exporting call center report")
+
+    report, err := s.mysqlRepo.GetCallCenterReportData(ctx, filter)
+    if err != nil {
+        return "", "", fmt.Errorf("get call center report: %w", err)
+    }
+
+    filePath, fileName, err := s.exporter.ExportCallCenterReport(report)
+    if err != nil {
+        return "", "", fmt.Errorf("export to excel: %w", err)
+    }
+
+    return filePath, fileName, nil
+}
+
+func (s *Service) detectAnomalies(data []domain.ManagerMetrics) []string {
+    var anomalies []string
+    
+    // Calculate averages
+    var avgTargetConv, avgVisitConv, avgVisitSuccess float64
+    for _, m := range data {
+        avgTargetConv += m.TargetConversion
+        avgVisitConv += m.VisitConversion
+        avgVisitSuccess += m.VisitSuccess
+    }
+    count := float64(len(data))
+    avgTargetConv /= count
+    avgVisitConv /= count
+    avgVisitSuccess /= count
+
+    // Check for anomalies
+    for _, m := range data {
+        if m.TargetConversion < avgTargetConv*0.5 {
+            anomalies = append(anomalies, fmt.Sprintf("Низкая конверсия в целевые у %s: %.1f%%", m.ManagerName, m.TargetConversion))
+        }
+        if m.VisitConversion < avgVisitConv*0.5 {
+            anomalies = append(anomalies, fmt.Sprintf("Низкая конверсия в визиты у %s: %.1f%%", m.ManagerName, m.VisitConversion))
+        }
+        if m.VisitSuccess < avgVisitSuccess*0.5 {
+            anomalies = append(anomalies, fmt.Sprintf("Низкая успешность визитов у %s: %.1f%%", m.ManagerName, m.VisitSuccess))
+        }
+    }
+
+    return anomalies
+}
+
 func splitIntoChunks(ids []int64, chunkSize int) [][]int64 {
 	var chunks [][]int64
 	for i := 0; i < len(ids); i += chunkSize {

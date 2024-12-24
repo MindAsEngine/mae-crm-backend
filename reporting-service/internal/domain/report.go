@@ -16,6 +16,7 @@ type SpeedReport struct {
 }
 
 
+
 // Фильтр для отчета по регионам
 type RegionReportFilter struct {
 	StartDate time.Time
@@ -44,17 +45,32 @@ type SpeedReportRow struct {
 
 // Фильтр для отчета по колл-центру
 type CallCenterReportFilter struct {
-	StartDate time.Time
-	EndDate   time.Time
+	StartDate *time.Time  `json:"start_date"`
+	EndDate   *time.Time  `json:"end_date"`
 }
 
 // Строка отчета по колл-центру
-type CallCenterReportRow struct {
-	ManagerName      string `db:"manager_name"`
-	TotalCalls       int    `db:"total_calls"`
-	TargetCalls      int    `db:"target_calls"`
-	ScheduledVisits  int    `db:"scheduled_visits"`
-	CompletedVisits  int    `db:"completed_visits"`
-	PaidBookings     int    `db:"paid_bookings"`
-	Contracts        int    `db:"contracts"`
+type ManagerMetrics struct {
+    ManagerName           string  `json:"manager_name" db:"users_name"`
+    TotalInquiries       int     `json:"total_inquiries" db:"total_inquiries"`
+    TargetInquiries      int     `json:"target_inquiries" db:"target_inquiries"`
+    TargetConversion     float64 `json:"target_conversion"`
+    AppointedVisits      int     `json:"appointed_visits" db:"appointed_visits"`
+    VisitConversion      float64 `json:"visit_conversion"`
+    CompletedVisits      int     `json:"completed_visits" db:"completed_visits"`
+    VisitSuccess         float64 `json:"visit_success"`
+    LeadToVisit         float64 `json:"lead_to_visit"`
+    // Optional metrics
+    //Bookings            int     `json:"bookings,omitempty" db:"brons"`
+    //VisitToBooking      float64 `json:"visit_to_booking,omitempty"`
+    //Contracts           int     `json:"contracts,omitempty" db:"ddus"`
+    //BookingToContract   float64 `json:"booking_to_contract,omitempty"`
+    //LeadToContract      float64 `json:"lead_to_contract,omitempty"`
+}
+
+type CallCenterReport struct {
+    Headers     []Header         `json:"headers"`
+    Data        []ManagerMetrics `json:"data"`
+    Totals      ManagerMetrics   `json:"totals"`
+    Anomalies   []string        `json:"anomalies,omitempty"`
 }

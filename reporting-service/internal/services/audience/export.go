@@ -258,3 +258,142 @@ func (e *ExcelExporter) ExportApplications(ctx context.Context, filter *domain.A
 
 	return filePath, fileName, nil
 }
+
+func (e *ExcelExporter) ExportCallCenterReport(report *domain.CallCenterReport) (string, string, error) {
+    f := excelize.NewFile()
+    defer f.Close()
+
+    sheetName := "Sales Report"
+    f.SetSheetName("Sheet1", sheetName)
+
+    // Set headers style
+    headerStyle, err := f.NewStyle(&excelize.Style{
+        Font: &excelize.Font{Bold: true},
+        Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#CCCCCC"}},
+        Alignment: &excelize.Alignment{Horizontal: "center"},
+    })
+    if err != nil {
+        return "", "", fmt.Errorf("create header style: %w", err)
+    }
+
+    // Set percent style
+    percentStyle, err := f.NewStyle(&excelize.Style{
+		NumFmt:    10,
+        Alignment: &excelize.Alignment{Horizontal: "right"},
+    })
+    if err != nil {
+        return "", "", fmt.Errorf("create percent style: %w", err)
+    }
+
+    // Write headers
+    for i, header := range report.Headers {
+        col := string(rune('A' + i))
+        cell := fmt.Sprintf("%s1", col)
+        f.SetCellValue(sheetName, cell, header.Title)
+        f.SetColWidth(sheetName, col, col, 15)
+    }
+    f.SetRowStyle(sheetName, 1, 1, headerStyle)
+
+    // Write data
+    for i, data := range report.Data {
+        row := i + 2
+        metrics := []interface{}{
+            data.ManagerName,
+            data.TotalInquiries,
+            data.TargetInquiries,
+            data.TargetConversion / 100,
+            data.AppointedVisits,
+            data.VisitConversion / 100,
+            data.CompletedVisits,
+            data.VisitSuccess / 100,
+            data.LeadToVisit / 100,
+        }
+
+        //if len(report.Headers) > 9 { // If optional columns are included
+        //    metrics = append(metrics,
+        //        data.Bookings,
+        //        data.VisitToBooking / 100,
+        //        data.Contracts,
+        //        data.BookingToContract / 100,
+        //        data.LeadToContract / 100,
+        //    )
+        //}
+
+        for j, value := range metrics {
+            cell := fmt.Sprintf("%s%d", string(rune('A'+j)), row)
+            f.SetCellValue(sheetName, cell, value)
+            
+            // Apply percent style to conversion columns
+            if j == 3 || j == 5 || j == 7 || j == 8 || j == 10 || j == 12 || j == 13 {
+                f.SetCellStyle(sheetName, cell, cell, percentStyle)
+            }
+        }
+    }
+
+    // Write totals
+    totalRow := len(report.Data) + 2
+    totalStyle, _ := f.NewStyle(&excelize.Style{
+        Font: &excelize.Font{Bold: true},
+        Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#E0E0E0"}},
+    })
+
+    totals := []interface{}{
+        "ИТОГО",
+        report.Totals.TotalInquiries,
+        report.Totals.TargetInquiries,
+        report.Totals.TargetConversion / 100,
+        report.Totals.AppointedVisits,
+        report.Totals.VisitConversion / 100,
+        report.Totals.CompletedVisits,
+        report.Totals.VisitSuccess / 100,
+        report.Totals.LeadToVisit / 100,
+    }
+
+    //if len(report.Headers) > 9 {
+    //    totals = append(totals,
+    //        report.Totals.Bookings,
+    //        report.Totals.VisitToBooking / 100,
+    //        report.Totals.Contracts,
+    //        report.Totals.BookingToContract / 100,
+    //        report.Totals.LeadToContract / 100,
+    //    )
+    //}
+
+    for j, value := range totals {
+        cell := fmt.Sprintf("%s%d", string(rune('A'+j)), totalRow)
+        f.SetCellValue(sheetName, cell, value)
+        f.SetCellStyle(sheetName, cell, cell, totalStyle)
+        
+        if j == 3 || j == 5 || j == 7 || j == 8 || j == 10 || j == 12 || j == 13 {
+            f.SetCellStyle(sheetName, cell, cell, percentStyle)
+        }
+    }
+
+    // Add anomalies sheet if present
+    if len(report.Anomalies) > 0 {
+        f.NewSheet("Anomalies")
+        f.SetCellValue("Anomalies", "A1", "Обнаруженные аномалии")
+        f.SetCellStyle("Anomalies", "A1", "A1", headerStyle)
+        
+        for i, anomaly := range report.Anomalies {
+            f.SetCellValue("Anomalies", fmt.Sprintf("A%d", i+2), anomaly)
+        }
+        
+        f.SetColWidth("Anomalies", "A", "A", 50)
+    }
+
+    // Save file
+    fileName := fmt.Sprintf("sales_report_%s.xlsx", 
+        time.Now().Format("20060102_150405"))
+    filePath := filepath.Join("export/CALL_CENTER_REPORTS", fileName)
+
+    if err := os.MkdirAll("export/CALL_CENTER_REPORTS", 0755); err != nil {
+        return "", "", fmt.Errorf("create exports directory: %w", err)
+    }
+
+    if err := f.SaveAs(filePath); err != nil {
+        return "", "", fmt.Errorf("save excel file: %w", err)
+    }
+
+    return filePath, fileName, nil
+}

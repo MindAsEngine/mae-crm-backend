@@ -77,7 +77,6 @@ func (r *MySQLAudienceRepository) GetFilters(ctx context.Context) (domain.Applic
 		return domain.ApplicationFilterResponce{}, fmt.Errorf("select filters: %w", err)
 	}
 	return filter, nil
-
 }
 
 func (r *MySQLAudienceRepository) GetApplicationsByAudienceFilter(ctx context.Context, filter domain.AudienceCreationFilter) ([]domain.Application, error) {
@@ -415,7 +414,8 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 
 	// Build ORDER BY clause
 	orderClause := " ORDER BY eb.date_added DESC" // Default sorting
-
+		
+	
 	if filter.OrderField != "" {
 		dbField, exists := sortableFields[filter.OrderField]
 		if !exists {
@@ -439,7 +439,6 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 	if err := r.db.GetContext(ctx, &totalItems, countQuery, countArgs...); err != nil {
 		return nil, fmt.Errorf("count applications: %w", err)
 	}
-
 
 	// Apply pagination after sorting
 	fullQuery := query + orderClause + " LIMIT :limit OFFSET :offset"
@@ -656,9 +655,9 @@ func (r *MySQLAudienceRepository) ExportApplicationsWithFilters(ctx context.Cont
 	return applications, nil
 }
 
-func (r *MySQLAudienceRepository) GetRegionsData(ctx context.Context, filter *domain.RegionFilter) (*domain.RegionsResponse, error) {
+func (r *MySQLAudienceRepository) GetRegionsData(ctx context.Context, filter *domain.RegionFilter) (*domain.RegionsResponse, error) {	
 	// Get unique cities using regexp
-    regionsQuery := `
+	regionsQuery := `
         SELECT DISTINCT 
             TRIM(REGEXP_SUBSTR(passport_address, '(?i)\\s*г\\.?\\s*([а-яА-Я]+)')) as city
         FROM estate_deals_contacts
@@ -681,13 +680,13 @@ func (r *MySQLAudienceRepository) GetRegionsData(ctx context.Context, filter *do
 
 	// Add columns for each city count
 	for _, region := range regions {
-        query += fmt.Sprintf(`,
+		query += fmt.Sprintf(`,
             COUNT(CASE 
                 WHEN TRIM(REGEXP_SUBSTR(edc.passport_address, '(?i)\\s*г\\.?\\s*([а-яА-Я]+)')) = TRIM(?) 
                 AND (eb.status_name = 'Сделка проведена' OR eb.status_name = 'Бронь')
                 THEN 1 
             END) as %s`, sanitizeColumnName(region))
-    }
+	}
 
 	query += `
         FROM geo_city_complex gcc
@@ -731,32 +730,32 @@ func (r *MySQLAudienceRepository) GetRegionsData(ctx context.Context, filter *do
 
 	// Scan rows
 	var data []map[string]interface{}
-    footer := make(map[string]int)
+	footer := make(map[string]int)
 
 	for rows.Next() {
 		var id int
 		var name string
 		rowData := make(map[string]interface{})
-		
+
 		values := make([]interface{}, 2+len(regions))
 		values[0] = &id
 		values[1] = &name
-	
+
 		// Prepare scan destinations for region counts
 		for i := range regions {
 			var count int
 			values[i+2] = &count
 		}
-	
+
 		// Scan row data
 		if err := rows.Scan(values...); err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)
 		}
-	
+
 		// Add ID and name to row data
 		rowData["id"] = id
 		rowData["name_of_projects"] = name
-	
+
 		// Add region counts to row data and update footer
 		for i, region := range regions {
 			count := *values[i+2].(*int)
@@ -764,15 +763,159 @@ func (r *MySQLAudienceRepository) GetRegionsData(ctx context.Context, filter *do
 			rowData[regionKey] = count
 			footer[regionKey] += count
 		}
-	
-		data = append(data, rowData)
-    }
 
-    return &domain.RegionsResponse{
-        Headers: headers,
-        Data:    data,
-        Footer:  footer,
-    }, nil
+		data = append(data, rowData)
+	}
+
+	return &domain.RegionsResponse{
+		Headers: headers,
+		Data:    data,
+		Footer:  footer,
+	}, nil
+}
+
+func (r *MySQLAudienceRepository) GetCallCenterReportData(ctx context.Context, filter *domain.CallCenterReportFilter) (*domain.CallCenterReport, error) {
+	query := `
+        SELECT
+            u.users_name,
+            COUNT(*) as total_inquiries,
+            COUNT(CASE 
+                WHEN eb.status_name IN ('Подбор', 'Отказ') 
+                THEN 1 
+            END) as target_inquiries,
+            COUNT(CASE 
+                WHEN eb.status_name = 'Подбор' AND eb.custom_status_name = 'Визит состоялся'
+                THEN 1 
+            END) as completed_visits,
+            COUNT(CASE 
+                WHEN eb.status_name = 'Подбор' AND eb.custom_status_name = 'Назначенная встреча'
+                THEN 1 
+            END) as appointed_visits 
+            -- COUNT(CASE 
+            --     WHEN eb.status_name = 'Бронь'
+            --     THEN 1 
+            -- END) as brons,
+            -- COUNT(CASE 
+            --     WHEN eb.status_name IN ('Сделка проведена', 'Сделка в работе')
+            --     THEN 1 
+            -- END) as ddus
+        FROM estate_buys eb 
+        RIGHT JOIN users u ON eb.manager_id = u.id
+        LEFT JOIN estate_buys_statuses_log ebsl ON eb.id = ebsl.estate_buy_id
+        WHERE eb.company_id = 528 AND
+        u.departments_id = 1903
+    `
+
+	orderClause := " GROUP BY u.users_name ORDER BY u.users_name DESC" // Default sorting
+
+	var args []interface{}
+
+	whereConditions := []string{}
+
+	if filter.StartDate != nil &&
+		filter.EndDate != nil &&
+		!filter.StartDate.IsZero() &&
+		!filter.EndDate.IsZero() {
+			whereConditions = append(whereConditions, "eb.date_added >= ?")
+			args = append(args, filter.StartDate)
+			whereConditions = append(whereConditions, "eb.date_added <= ?")
+			args = append(args, filter.EndDate)
+	}
+
+	if len(whereConditions) > 0 {
+		query += " AND " + strings.Join(whereConditions, " AND ")
+	}
+	
+	query += orderClause
+	var metrics []domain.ManagerMetrics
+	
+	if err := r.db.SelectContext(ctx, &metrics, query, args...); err != nil {
+		return nil, fmt.Errorf("get sales metrics: %w", err)
+	}
+
+	// Calculate conversions and totals
+	totals := domain.ManagerMetrics{ManagerName: "Итого"}
+	for i := range metrics {
+		m := &metrics[i]
+
+		// Calculate basic conversions
+		if m.TotalInquiries > 0 {
+			m.TargetConversion = float64(m.TargetInquiries) / float64(m.TotalInquiries) * 100
+		}
+		if m.TargetInquiries > 0 {
+			m.VisitConversion = float64(m.AppointedVisits) / float64(m.TargetInquiries) * 100
+			m.LeadToVisit = float64(m.CompletedVisits) / float64(m.TargetInquiries) * 100
+		}
+		if m.AppointedVisits > 0 {
+			m.VisitSuccess = float64(m.CompletedVisits) / float64(m.AppointedVisits) * 100
+		}
+
+		//if m.CompletedVisits > 0 {
+		//    m.VisitToBooking = float64(m.Bookings) / float64(m.CompletedVisits) * 100
+		//}
+		//if m.Bookings > 0 {
+		//    m.BookingToContract = float64(m.Contracts) / float64(m.Bookings) * 100
+		//}
+		//if m.TargetInquiries > 0 {
+		//    m.LeadToContract = float64(m.Contracts) / float64(m.TargetInquiries) * 100
+		//}
+
+		// Update totals
+		totals.TotalInquiries += m.TotalInquiries
+		totals.TargetInquiries += m.TargetInquiries
+		totals.AppointedVisits += m.AppointedVisits
+		totals.CompletedVisits += m.CompletedVisits
+		//totals.Bookings += m.Bookings
+		//totals.Contracts += m.Contracts
+	}
+
+	// Calculate total conversions
+	if totals.TotalInquiries > 0 {
+		totals.TargetConversion = float64(totals.TargetInquiries) / float64(totals.TotalInquiries) * 100
+	}
+	if totals.TargetInquiries > 0 {
+		totals.VisitConversion = float64(totals.AppointedVisits) / float64(totals.TargetInquiries) * 100
+		totals.LeadToVisit = float64(totals.CompletedVisits) / float64(totals.TargetInquiries) * 100
+	}
+	if totals.AppointedVisits > 0 {
+		totals.VisitSuccess = float64(totals.CompletedVisits) / float64(totals.AppointedVisits) * 100
+	}
+
+	// Create headers
+	headers := []domain.Header{
+		{Name: "manager_name", Title: "ФИО менеджера", IsVisible: true, IsAdditional: true, Format: "string"},
+		{Name: "total_inquiries", Title: "Всего обращений", IsVisible: true, IsAdditional: true, Format: "number"},
+		{Name: "target_inquiries", Title: "Целевые", IsVisible: true, IsAdditional: true, Format: "number"},
+		{Name: "target_conversion", Title: "Конверсия в целевые", IsVisible: true, IsAdditional: true, Format: "percent"},
+		{Name: "appointed_visits", Title: "Назначено визитов", IsVisible: true, IsAdditional: true, Format: "number"},
+		{Name: "visit_conversion", Title: "Конверсия в визиты", IsVisible: true, IsAdditional: true, Format: "percent"},
+		{Name: "completed_visits", Title: "Визиты состоялись", IsVisible: true, IsAdditional: true, Format: "number"},
+		{Name: "visit_success", Title: "Конверсия визитов", IsVisible: true, IsAdditional: true, Format: "percent"},
+		{Name: "lead_to_visit", Title: "Конверсия лид->визит", IsVisible: true, IsAdditional: true, Format: "percent"},
+
+		//{Name: "bookings", Title: "Бронирования", IsVisible: true, IsAdditional: true, Format: "number"},
+		//{Name: "visit_to_booking", Title: "Конверсия визит->бронь", IsVisible: true, IsAdditional: true, Format: "percent"},
+		//{Name: "contracts", Title: "ДДУ", IsVisible: true, IsAdditional: true, Format: "number"},
+		//{Name: "booking_to_contract", Title: "Конверсия бронь->ДДУ", IsVisible: true, IsAdditional: true, Format: "percent"},
+		//{Name: "lead_to_contract", Title: "Конверсия лид->ДДУ", IsVisible: true, IsAdditional: true, Format: "percent"},
+	}
+
+	// if showOptional {
+	//     optionalHeaders := []domain.Header{
+	//         {Name: "bookings", Title: "Бронирования", IsVisible: true, Format: "number"},
+	//         {Name: "visit_to_booking", Title: "Конверсия визит->бронь", IsVisible: true, Format: "percent"},
+	//         {Name: "contracts", Title: "ДДУ", IsVisible: true, Format: "number"},
+	//         {Name: "booking_to_contract", Title: "Конверсия бронь->ДДУ", IsVisible: true, Format: "percent"},
+	//         {Name: "lead_to_contract", Title: "Конверсия лид->ДДУ", IsVisible: true, Format: "percent"},
+	//     }
+	//     headers = append(headers, optionalHeaders...)
+	// }
+
+	return &domain.CallCenterReport{
+		Headers: headers,
+		Data:    metrics,
+		Totals:  totals,
+	}, nil
 }
 
 func sanitizeColumnName(name string) string {

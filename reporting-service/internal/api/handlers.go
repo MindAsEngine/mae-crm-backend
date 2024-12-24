@@ -35,7 +35,6 @@ func NewHandler(audienceService *audience.Service, logger *zap.Logger) *Handler 
 func (h *Handler) RegisterRoutes(r *mux.Router) {
 	api := r.PathPrefix("/api").Subrouter()
 
-	api.HandleFunc("/applications/filters", h.GetAudienceFilters).Methods(http.MethodGet)
 	// Audiences endpoints
 	api.HandleFunc("/audiences", h.GetAudiences).Methods(http.MethodGet)
 	api.HandleFunc("/audiences", h.CreateAudience).Methods(http.MethodPost)
@@ -44,9 +43,16 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 	api.HandleFunc("/audiences/{audienceId}", h.DeleteAudience).Methods(http.MethodDelete)
 	api.HandleFunc("/audiences/{audienceId}/disconnect", h.DisconnectAudience).Methods(http.MethodDelete)
 	api.HandleFunc("/audiences/{audienceId}/export", h.ExportAudience).Methods(http.MethodGet)
+	
+	api.HandleFunc("/applications/filters", h.GetAudienceFilters).Methods(http.MethodGet)
 	api.HandleFunc("/applications", h.ListApplications).Methods(http.MethodGet)
 	api.HandleFunc("/applications/export", h.ExportApplications).Methods(http.MethodGet)
+	
 	api.HandleFunc("/regions", h.GetRegions).Methods(http.MethodGet)
+	api.HandleFunc("/regions/export", h.GetRegions).Methods(http.MethodGet)
+	
+	api.HandleFunc("/call_center", h.GetCallCenterReport).Methods(http.MethodGet)
+	api.HandleFunc("/call_center/export", h.ExportCallCenterReport).Methods(http.MethodGet)
 }
 
 func (h *Handler) GetAudienceFilters(w http.ResponseWriter, r *http.Request) {
@@ -341,6 +347,82 @@ func (h *Handler) GetRegions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.jsonResponse(w, response, http.StatusOK)
+}
+
+func (h *Handler) GetCallCenterReport(w http.ResponseWriter, r *http.Request) {
+    ctx := r.Context()
+
+	time_from := time.Time{}
+	time_to := time.Time{}
+    err:= error(nil)
+	if r.URL.Query().Get("start_date") != "" {
+		time_from, err = time.Parse(time.RFC3339, r.URL.Query().Get("start_date"))
+		if err != nil  {
+			h.errorResponse(w, "invalid date_from format", err, http.StatusBadRequest)
+			return
+		}
+	}
+	if r.URL.Query().Get("end_date") != "" {
+		time_to, err = time.Parse(time.RFC3339, r.URL.Query().Get("end_date"))
+		if err != nil {
+			h.errorResponse(w, "invalid date_to format", err, http.StatusBadRequest)
+			return
+		}
+	}
+	filter := &domain.CallCenterReportFilter{
+		StartDate: &time_from,
+		EndDate:   &time_to,}
+
+    // Get report from service
+    report, err := h.audienceService.GetCallCenterReport(ctx, filter)
+    if err != nil {
+        h.errorResponse(w, "failed to get sales report", err, http.StatusInternalServerError)
+        return
+    }
+
+    // Return JSON by default
+    h.jsonResponse(w, report, http.StatusOK)
+}
+
+func (h *Handler) ExportCallCenterReport(w http.ResponseWriter, r *http.Request) {
+    ctx := r.Context()
+
+	time_from := time.Time{}
+	time_to := time.Time{}
+    err:= error(nil)
+	if r.URL.Query().Get("start_date") != "" {
+		time_from, err = time.Parse(time.RFC3339, r.URL.Query().Get("start_date"))
+		if err != nil  {
+			h.errorResponse(w, "invalid date_from format", err, http.StatusBadRequest)
+			return
+		}
+	}
+	if r.URL.Query().Get("end_date") != "" {
+		time_to, err = time.Parse(time.RFC3339, r.URL.Query().Get("end_date"))
+		if err != nil {
+			h.errorResponse(w, "invalid date_to format", err, http.StatusBadRequest)
+			return
+		}
+	}
+	filter := &domain.CallCenterReportFilter{
+		StartDate: &time_from,
+		EndDate:   &time_to,}
+
+
+    // Get exported file path
+    filePath, fileName, err := h.audienceService.ExportSalesReport(ctx, filter)
+    if err != nil {
+        h.errorResponse(w, "failed to export sales report", err, http.StatusInternalServerError)
+        return
+    }
+
+    // Get filename from path
+
+
+    // Set headers for file download
+    w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
+	http.ServeFile(w, r, filePath)
 }
 
 func (h *Handler) errorResponse(w http.ResponseWriter, message string, err error, code int) {
