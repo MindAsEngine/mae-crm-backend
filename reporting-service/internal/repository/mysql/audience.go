@@ -2,9 +2,12 @@ package mysql
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"math"
 	"regexp"
+	"strconv"
+
 	//"time"
 
 	"reporting-service/internal/domain"
@@ -655,123 +658,174 @@ func (r *MySQLAudienceRepository) ExportApplicationsWithFilters(ctx context.Cont
 	return applications, nil
 }
 
-func (r *MySQLAudienceRepository) GetRegionsData(ctx context.Context, filter *domain.RegionFilter) (*domain.RegionsResponse, error) {	
-	// Get unique cities using regexp
-	regionsQuery := `
-        SELECT DISTINCT 
-            TRIM(REGEXP_SUBSTR(passport_address, '(?i)\\s*г\\.?\\s*([а-яА-Я]+)')) as city
-        FROM estate_deals_contacts
-        WHERE passport_address IS NOT NULL 
-        AND passport_address != ''
-        AND passport_address REGEXP '(?i)\\s*г\\.?\\s*[а-яА-Я]+'
-        ORDER BY city
-`
-
-	var regions []string
-	if err := r.db.SelectContext(ctx, &regions, regionsQuery); err != nil {
-		return nil, fmt.Errorf("get regions: %w", err)
-	}
-
-	// Build base query with city extraction
-	query := `
- 	SELECT 
-	 gcc.id,
-	 gcc.geo_complex_name as name_of_projects`
-
-	// Add columns for each city count
-	for _, region := range regions {
-		query += fmt.Sprintf(`,
-            COUNT(CASE 
-                WHEN TRIM(REGEXP_SUBSTR(edc.passport_address, '(?i)\\s*г\\.?\\s*([а-яА-Я]+)')) = TRIM(?) 
-                AND (eb.status_name = 'Сделка проведена' OR eb.status_name = 'Бронь')
-                THEN 1 
-            END) as %s`, sanitizeColumnName(region))
-	}
-
-	query += `
-        FROM geo_city_complex gcc
-        LEFT JOIN estate_houses h ON h.complex_id = gcc.geo_complex_id
-        LEFT JOIN estate_buys eb ON eb.house_id = h.id
-        LEFT JOIN estate_deals_contacts edc ON eb.contacts_id = edc.id
-        WHERE gcc.company_id = 528
-        GROUP BY gcc.id, gcc.geo_complex_name
-        ORDER BY gcc.geo_complex_name
+func (r *MySQLAudienceRepository) GetRegionsData(ctx context.Context, filter *domain.RegionFilter) (*domain.RegionsResponse, error) {
+    // Step 1: Set session variables
+    setSessionQuery := `
+        SET SESSION group_concat_max_len = 10000;
     `
+    if _, err := r.db.ExecContext(ctx, setSessionQuery); err != nil {
+        return nil, fmt.Errorf("set session variables: %w", err)
+    }
 
-	// Debug log
-	r.logger.Debug("query structure",
-		zap.String("query", query),
-		zap.Strings("regions", regions))
+    // Step 2: Initialize variables
+    if _, err := r.db.ExecContext(ctx, `SET @cities = NULL`); err != nil {
+        return nil, fmt.Errorf("initialize @cities variable: %w", err)
+    }
+    if _, err := r.db.ExecContext(ctx, `SET @rn = 0`); err != nil {
+        return nil, fmt.Errorf("initialize @rn variable: %w", err)
+    }
 
-	// Prepare args with regions
-	args := make([]interface{}, len(regions))
-	for i, region := range regions {
-		args[i] = region
-	}
+    // Step 3: Generate cities SQL
+    citiesQuery := `
+        SELECT 
+    GROUP_CONCAT(DISTINCT CONCAT(
+        "SUM(CASE WHEN city_name = '", city_name, "' THEN total_requests ELSE 0 END) AS '", city_name, "'"
+    )) INTO @cities
+FROM (
+    SELECT DISTINCT 
+        REGEXP_SUBSTR(ec.passport_address, 'г\\.\\s*([^,\\s]+)') AS city_name
+    FROM macro_bi_cmp_528.estate_deals_contacts ec
+    LEFT JOIN macro_bi_cmp_528.estate_buys eb ON eb.contacts_id = ec.id
+    WHERE (ec.passport_address IS NOT NULL) AND ec.passport_address != ''AND (eb.status_name = 'Сделка проведена' OR eb.status_name = 'Сделка в работе') AND eb.date_added >= '2024-01-01'
+) city_list;
+    `
+    if _, err := r.db.ExecContext(ctx, citiesQuery); err != nil {
+        return nil, fmt.Errorf("generate cities SQL: %w", err)
+    }
 
-	// Execute query
-	rows, err := r.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("execute query: %w", err)
-	}
-	defer rows.Close()
+    // var citiesSQL string
+    // getCitiesSQLQuery := `SELECT @cities`
+    // if err := r.db.QueryRowContext(ctx, getCitiesSQLQuery).Scan(&citiesSQL); err != nil {
+    //     return nil, fmt.Errorf("get cities SQL: %w", err)
+    // }
+    // if _, err := r.db.ExecContext(ctx, `SET @sql = NULL;`); err != nil {
+    //     return nil, fmt.Errorf("initialize @rn variable: %w", err)
+    // }
+    // Step 4: Build main query
+    mainQuery := fmt.Sprintf(`
+SET @sql = CONCAT(
+    "SELECT 
+        project_name, ",
+        @cities, "
+     FROM (
+         SELECT 
+             h.complex_name AS project_name, 
+             REGEXP_SUBSTR(ec.passport_address, 'г\\.\\s*([^,\\s]+)') AS city_name,
+             COUNT(eb.id) AS total_requests
+         FROM macro_bi_cmp_528.estate_buys eb
+         LEFT JOIN macro_bi_cmp_528.estate_sells es
+			 ON es.estate_buy_id = eb.id
+         LEFT JOIN macro_bi_cmp_528.estate_houses h 
+             ON h.id = eb.house_id
+         LEFT JOIN macro_bi_cmp_528.estate_deals_contacts ec 
+             ON ec.id = eb.contacts_id
+         WHERE 
+             eb.house_id != 0 
+             AND ec.passport_address != ''
+             AND es.estate_sell_status_name = 'Сделка проведена' OR es.estate_sell_status_name = 'Сделка в работе'
+         GROUP BY h.complex_name, REGEXP_SUBSTR(ec.passport_address, 'г\\.\\s*([^,\\s]+)')
+     ) AS data
+     GROUP BY project_name
+     ORDER BY project_name"
+);
+    `)
 
-	// Create headers
-	headers := make([]domain.Header, 0, len(regions))
-	for _, region := range regions {
-		headers = append(headers, domain.Header{
-			Name:         region,
-			Title:        region,
-			IsVisible:    true,
-			IsAdditional: true,
-			Format:       "number",
-		})
-	}
+    if _, err := r.db.ExecContext(ctx, mainQuery); err != nil {
+        return nil, fmt.Errorf("build main query: %w", err)
+    }
 
-	// Scan rows
-	var data []map[string]interface{}
-	footer := make(map[string]int)
+    // Step 5: Execute the prepared statement
+    if _, err := r.db.ExecContext(ctx, "PREPARE stmt FROM @sql;"); err != nil {
+        return nil, fmt.Errorf("prepare statement: %w", err)
+    }
+
+    // Step 6: Query the results
+    rows, err := r.db.QueryContext(ctx, "EXECUTE stmt")
+    if err != nil {
+        return nil, fmt.Errorf("execute query: %w", err)
+    }
+    defer rows.Close()
+
+    // if _, err := r.db.ExecContext(ctx, "DEALLOCATE PREPARE stmt;"); err != nil {
+    //     return nil, fmt.Errorf("deallocate statement: %w", err)
+    // }
+
+    // Get column names for mapping
+    columns, err := rows.Columns()
+    if err != nil {
+        return nil, fmt.Errorf("get columns: %w", err)
+    }
+
+    // Prepare headers
+    headers := []domain.Header{
+        {Name: "id", IsID: true, Title: "№", IsVisible: false, IsAdditional: false, Format: "number"},
+        {Name: "name_of_projects", Title: "Наименование проектов", IsVisible: true, IsAdditional: false, Format: "string"},
+    }
+
+    for i := 2; i < len(columns); i++ {
+        headers = append(headers, domain.Header{
+            Name:         columns[i],
+            Title:        columns[i],
+            IsVisible:    true,
+            IsAdditional: true,
+            Format:       "number",
+        })
+    }
+
+    // Process rows
+    var data []map[string]interface{}
+    footer := map[string]int{
+        "id":             0,
+        "name_of_projects": -1,
+    }
 
 	for rows.Next() {
-		var id int
-		var name string
-		rowData := make(map[string]interface{})
+        values := make([]interface{}, len(columns))
+        valuePointers := make([]interface{}, len(columns))
+        for i := range values {
+            valuePointers[i] = new(sql.RawBytes)
+        }
 
-		values := make([]interface{}, 2+len(regions))
-		values[0] = &id
-		values[1] = &name
+        if err := rows.Scan(valuePointers...); err != nil {
+            return nil, fmt.Errorf("scan row: %w", err)
+        }
 
-		// Prepare scan destinations for region counts
-		for i := range regions {
-			var count int
-			values[i+2] = &count
-		}
+        rowData := make(map[string]interface{})
+        for i, col := range columns {
+            rawValue := *(valuePointers[i].(*sql.RawBytes))
+            if len(rawValue) == 0 {
+                rowData[col] = 0
+                if i > 1 { // Sum for footer (skip id and name)
+                    footer[col] += 0
+                }
+                continue
+            }
 
-		// Scan row data
-		if err := rows.Scan(values...); err != nil {
-			return nil, fmt.Errorf("scan row: %w", err)
-		}
+            valueStr := string(rawValue)
+            fmt.Printf("Processing column: %s, value: %s\n", col, valueStr) // Debugging statement
 
-		// Add ID and name to row data
-		rowData["id"] = id
-		rowData["name_of_projects"] = name
+            if num, err := strconv.Atoi(valueStr); err == nil {
+                rowData[col] = num
+                if i > 1 { // Sum for footer (skip id and name)
+                    footer[col] += num
+                }
+            } else {
+                rowData[col] = valueStr
+            }
+        }
+        data = append(data, rowData)
+    }
 
-		// Add region counts to row data and update footer
-		for i, region := range regions {
-			count := *values[i+2].(*int)
-			regionKey := fmt.Sprintf(region, i+1)
-			rowData[regionKey] = count
-			footer[regionKey] += count
-		}
-
-		data = append(data, rowData)
-	}
-
-	return &domain.RegionsResponse{
-		Headers: headers,
-		Data:    data,
-		Footer:  footer,
-	}, nil
+	footerData := make(map[string]interface{})
+    for k, v := range footer {
+        footerData[k] = v
+    }
+	footerData["name_of_projects"] = "Общее"
+    return &domain.RegionsResponse{
+        Headers: headers,
+        Data:    data,
+        Footer:  footerData,
+    }, nil
 }
 
 func (r *MySQLAudienceRepository) GetCallCenterReportData(ctx context.Context, filter *domain.CallCenterReportFilter) (*domain.CallCenterReport, error) {

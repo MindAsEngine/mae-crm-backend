@@ -35,6 +35,7 @@ func NewHandler(audienceService *audience.Service, logger *zap.Logger) *Handler 
 func (h *Handler) RegisterRoutes(r *mux.Router) {
 	api := r.PathPrefix("/api").Subrouter()
 
+	api.HandleFunc("/health", h.HealthCheck).Methods(http.MethodGet)
 	// Audiences endpoints
 	api.HandleFunc("/audiences", h.GetAudiences).Methods(http.MethodGet)
 	api.HandleFunc("/audiences", h.CreateAudience).Methods(http.MethodPost)
@@ -51,8 +52,12 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 	api.HandleFunc("/regions", h.GetRegions).Methods(http.MethodGet)
 	api.HandleFunc("/regions/export", h.GetRegions).Methods(http.MethodGet)
 	
-	api.HandleFunc("/call_center", h.GetCallCenterReport).Methods(http.MethodGet)
-	api.HandleFunc("/call_center/export", h.ExportCallCenterReport).Methods(http.MethodGet)
+	api.HandleFunc("/call-center", h.GetCallCenterReport).Methods(http.MethodGet)
+	api.HandleFunc("/call-center/export", h.ExportCallCenterReport).Methods(http.MethodGet)
+}
+
+func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
+	h.jsonResponse(w, map[string]string{"status": "ok"}, http.StatusOK)
 }
 
 func (h *Handler) GetAudienceFilters(w http.ResponseWriter, r *http.Request) {

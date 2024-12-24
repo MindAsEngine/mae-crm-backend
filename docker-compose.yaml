@@ -1,75 +1,20 @@
 version: '3'
 
 services:
-  # # Audience Service
-  # audience-service:
-  #   build:
-  #     context: ./audience-service
-  #     dockerfile: Dockerfile
-  #   container_name: audience-service
-  #   ports:
-  #     - "8081:8081"
-  #   environment:
-  #     - DATABASE_URL=postgresql://postgres:password@db:5432/audience_db
-  #     - REDIS_URL=redis://redis:6379
-  #   depends_on:
-  #     - db
-  #     - redis
-  #     - rabbitmq
 
-  # # Ads Integration Service
-  # ads-integration-service:
-  #   restart: unless-stopped
-  #   build:
-  #     context: ./ads-integration-service
-  #     dockerfile: Dockerfile
-  #   container_name: ads-integration-service
-  #   ports:
-  #     - "8081:8081"
-  #   environment:
-  #     - DATABASE_URL=postgresql://postgres:password@db:5432/ads_integration_db
-  #     - QUEUE_URL=amqp://guest:guest@rabbitmq:5672
-  #   depends_on:
-  #     #- logging-service
-  #     - db
-  #     - mysql
-  #     - redis
-  #     - rabbitmq
-      
-
-  # # CRM Integration Service
-  # crm-integration-service:
-  #   restart: unless-stopped
-  #   build:
-  #     context: ./crm-integration-service
-  #     dockerfile: Dockerfile
-  #   container_name: crm-integration-service
-  #   ports:
-  #     - "8083:8083"
-  #   environment:
-  #     - CRM_API_URL=https://crm.example.com/api
-  #     - LOGGING_URL=http://logging-service:8084/logs
-  #   depends_on:
-  #     #- logging-service
-  #     - db
-  #     - mysql
-  #     - redis
-  #     - rabbitmq
-
-
-  # # Logging Service
-  # logging-service:
-  #   restart: unless-stopped
-  #   build:
-  #     context: ./logging-service
-  #     dockerfile: Dockerfile
-  #   container_name: logging-service
-  #   ports:
-  #     - "8084:8084"
-  #   environment:
-  #     - ELASTICSEARCH_URL=http://elasticsearch:8088
-  #   depends_on:
-  #     - elasticsearch
+  frontend:
+    restart: unless-stopped
+    build:
+      context: ./mae-crm-frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./mae-crm-frontend/src:/app/src
+      - ./mae-crm-frontend/public:/app/public
+    networks:
+      - app-network
 
   # Reporting Service
   reporting-service:
@@ -86,6 +31,11 @@ services:
       - DATABASE_URL=postgresql://user:password@db:55432/reporting_db
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "curl", "http://reporting-service:8080/api/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     depends_on:
       mysql:
         condition: service_healthy
@@ -106,6 +56,7 @@ services:
   #       condition: service_healthy
   #     db:
   #       condition: service_healthy
+  
   # PostgreSQL
   db:
     image: postgres:15
@@ -173,7 +124,7 @@ services:
     networks:
       - app-network
 
-  # # Elasticsearch
+  # Elasticsearch
   # elasticsearch:
   #   restart: unless-stopped
   #   image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
@@ -189,7 +140,7 @@ services:
   #   networks:
   #     - app-network
 
-#  # Redis
+#  Redis
 #   redis:
 #     restart: unless-stopped
 #     image: redis:7

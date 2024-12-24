@@ -417,7 +417,9 @@ func (s *Service) GetRegions(ctx context.Context, filter *domain.RegionFilter) (
 
     s.logger.Info("got regions data",
         zap.Int("total_projects", len(response.Data)),
-        zap.Int("total_regions", len(response.Headers)-2))
+        zap.Int("total_regions", len(response.Headers)-2),
+		zap.Any("footer", response.Footer),
+	)
 
     return response, nil
 }

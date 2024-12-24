@@ -59,5 +59,5 @@ type Header struct {
 type RegionsResponse struct {
 	Headers []Header                 `json:"headers"`
 	Data    []map[string]interface{} `json:"data"`
-	Footer  map[string]int           `json:"footer"`
+	Footer  map[string]interface{}   `json:"footer"`
 }
