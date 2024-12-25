@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
-	"regexp"
+	//"regexp"
 	"strconv"
 
 	//"time"
@@ -38,14 +38,14 @@ func validateAudienceFilter(filter domain.AudienceCreationFilter) []ValidationEr
 	var errors []ValidationError
 
 	// Date range validation
-	if filter.CreationDateFrom != nil && filter.CreationDateTo != nil {
-		if filter.CreationDateFrom.After(*filter.CreationDateTo) {
+	if filter.StartDate != nil && filter.EndDate != nil {
+		if filter.StartDate.After(*filter.EndDate) {
 			errors = append(errors, ValidationError{
 				Field: "date_range",
 				Error: "start date must be before end date",
 			})
 		}
-		if filter.CreationDateTo.Sub(*filter.CreationDateFrom).Hours() > 8784 {
+		if filter.EndDate.Sub(*filter.StartDate).Hours() > 8784 {
 			errors = append(errors, ValidationError{
 				Field: "date_range",
 				Error: "date range must be less than 366 days (8784 hours)",
@@ -55,7 +55,7 @@ func validateAudienceFilter(filter domain.AudienceCreationFilter) []ValidationEr
 	}
 
 	// At least one filter must be specified
-	if filter.CreationDateFrom == nil || filter.CreationDateTo == nil {
+	if filter.StartDate == nil || filter.EndDate == nil {
 		errors = append(errors, ValidationError{
 			Field: "filter",
 			Error: "date range fields required",
@@ -113,12 +113,14 @@ func (r *MySQLAudienceRepository) GetApplicationsByAudienceFilter(ctx context.Co
 
 	args := map[string]interface{}{}
 
-	// Add date filters
-	if filter.CreationDateFrom != nil && filter.CreationDateTo != nil {
-		query += " AND eb.date_added >= :creation_date_from"
-		args["creation_date_from"] = filter.CreationDateFrom
+	if filter.EndDate != nil && !filter.EndDate.IsZero(){
 		query += " AND eb.date_added <= :creation_date_to"
-		args["creation_date_to"] = filter.CreationDateTo
+		args["creation_date_to"] = filter.EndDate
+	}
+
+	if filter.StartDate != nil && !filter.StartDate.IsZero(){
+		query += " AND eb.date_added >= :creation_date_from"
+		args["creation_date_from"] = filter.StartDate
 	}
 
 	// Add status filter
@@ -180,11 +182,11 @@ func (r *MySQLAudienceRepository) GetNewApplicationsByAudience(ctx context.Conte
 	args["apllication_ids"] = apllication_ids
 
 	// Add date filters
-	if audience.Filter.CreationDateFrom != nil && audience.Filter.CreationDateTo != nil {
+	if audience.Filter.StartDate != nil && audience.Filter.EndDate != nil {
 		query += " AND eb.date_added >= :creation_date_from"
-		args["creation_date_from"] = audience.Filter.CreationDateFrom
+		args["creation_date_from"] = audience.Filter.StartDate
 		query += " AND eb.date_added <= :creation_date_to"
-		args["creation_date_to"] = audience.Filter.CreationDateTo
+		args["creation_date_to"] = audience.Filter.EndDate
 	}
 
 	// Add status filter
@@ -376,14 +378,14 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 		args["days_in_status"] = filter.StatusDuration
 	}
 
-	if filter.CreatedAtFrom != nil &&
-		filter.CreatedAtTo != nil &&
-		!filter.CreatedAtFrom.IsZero() &&
-		!filter.CreatedAtTo.IsZero() {
-		whereConditions = append(whereConditions, "eb.date_added >= :created_at_from")
-		args["created_at_from"] = filter.CreatedAtFrom
+	if filter.EndDate != nil && !filter.EndDate.IsZero(){
 		whereConditions = append(whereConditions, "eb.date_added <= :created_at_to")
-		args["created_at_to"] = filter.CreatedAtTo
+		args["created_at_to"] = filter.EndDate
+	}
+
+	if filter.StartDate != nil && !filter.StartDate.IsZero(){
+		whereConditions = append(whereConditions, "eb.date_added >= :created_at_from")
+		args["created_at_from"] = filter.StartDate
 	}
 
 	if len(whereConditions) > 0 {
@@ -605,13 +607,16 @@ func (r *MySQLAudienceRepository) ExportApplicationsWithFilters(ctx context.Cont
 		args = append(args, filter.StatusDuration)
 	}
 
-	if filter.CreatedAtFrom != nil && filter.CreatedAtTo != nil {
-		whereConditions = append(whereConditions, "eb.date_added >= ?")
-		args = append(args, filter.CreatedAtFrom)
+	if filter.EndDate != nil && !filter.EndDate.IsZero(){
 		whereConditions = append(whereConditions, "eb.date_added <= ?")
-		args = append(args, filter.CreatedAtTo)
-
+		args = append(args, filter.EndDate)
 	}
+
+	if filter.StartDate != nil && !filter.StartDate.IsZero(){
+			whereConditions = append(whereConditions, "eb.date_added >= ?")
+			args = append(args, filter.StartDate)
+	}
+
 
 	if len(whereConditions) > 0 {
 		baseQuery += " AND " + strings.Join(whereConditions, " AND ")
@@ -659,7 +664,21 @@ func (r *MySQLAudienceRepository) ExportApplicationsWithFilters(ctx context.Cont
 }
 
 func (r *MySQLAudienceRepository) GetRegionsData(ctx context.Context, filter *domain.RegionFilter) (*domain.RegionsResponse, error) {
-    // Step 1: Set session variables
+    //Step 0: Try date filters
+	tryDateQuerry := `SELECT * FROM macro_bi_cmp_528.estate_buys eb WHERE 1=1`
+	if filter.StartDate != nil &&!filter.StartDate.IsZero() {
+		tryDateQuerry = tryDateQuerry+` AND eb.date_added >= '`+filter.StartDate.Format("2006-01-02")+`'`
+	}
+	if filter.EndDate != nil && !filter.EndDate.IsZero(){
+		tryDateQuerry = tryDateQuerry+` AND eb.date_added <= '`+filter.EndDate.Format("2006-01-02")+`'`
+	}
+	tryDateQuerry = tryDateQuerry+` LIMIT 1`
+	if response, err := r.db.QueryContext(ctx, tryDateQuerry); err != nil || !response.Next() {
+		r.logger.Error("No appliccations for this dates: ", zap.Error(err))
+		return nil, fmt.Errorf("no applications for this dates: %w", err)
+	}
+
+	// Step 1: Set session variables
     setSessionQuery := `
         SET SESSION group_concat_max_len = 10000;
     `
@@ -686,9 +705,23 @@ FROM (
         REGEXP_SUBSTR(ec.passport_address, 'г\\.\\s*([^,\\s]+)') AS city_name
     FROM macro_bi_cmp_528.estate_deals_contacts ec
     LEFT JOIN macro_bi_cmp_528.estate_buys eb ON eb.contacts_id = ec.id
-    WHERE (ec.passport_address IS NOT NULL) AND ec.passport_address != ''AND (eb.status_name = 'Сделка проведена' OR eb.status_name = 'Сделка в работе') AND eb.date_added >= '2024-01-01'
-) city_list;
-    `
+    WHERE (ec.passport_address IS NOT NULL) AND ec.passport_address != ''AND (eb.status_name = 'Сделка проведена' OR eb.status_name = 'Сделка в работе') 
+	`
+	fmt.Println("filter.EndDate in IF", filter.StartDate)
+	fmt.Println("filter.EndDate in IF", filter.EndDate)
+
+	if filter.StartDate != nil &&!filter.StartDate.IsZero() {
+		citiesQuery = citiesQuery+` AND eb.date_added >= '`+filter.StartDate.Format("2006-01-02")+`'`
+		fmt.Println("filter.StartDate in IF", filter.StartDate)
+		
+	}
+	if filter.EndDate != nil && !filter.EndDate.IsZero(){
+		citiesQuery = citiesQuery+` AND eb.date_added <= '`+filter.EndDate.Format("2006-01-02")+`'`
+		fmt.Println("filter.EndDate in IF", filter.EndDate)
+	}
+
+	citiesQuery+=`) city_list;`
+
     if _, err := r.db.ExecContext(ctx, citiesQuery); err != nil {
         return nil, fmt.Errorf("generate cities SQL: %w", err)
     }
@@ -702,14 +735,14 @@ FROM (
     //     return nil, fmt.Errorf("initialize @rn variable: %w", err)
     // }
     // Step 4: Build main query
-    mainQuery := fmt.Sprintf(`
+    mainQuery := `
 SET @sql = CONCAT(
     "SELECT 
-        project_name, ",
+        name_of_projects, ",
         @cities, "
      FROM (
          SELECT 
-             h.complex_name AS project_name, 
+             h.complex_name AS name_of_projects, 
              REGEXP_SUBSTR(ec.passport_address, 'г\\.\\s*([^,\\s]+)') AS city_name,
              COUNT(eb.id) AS total_requests
          FROM macro_bi_cmp_528.estate_buys eb
@@ -723,12 +756,20 @@ SET @sql = CONCAT(
              eb.house_id != 0 
              AND ec.passport_address != ''
              AND es.estate_sell_status_name = 'Сделка проведена' OR es.estate_sell_status_name = 'Сделка в работе'
-         GROUP BY h.complex_name, REGEXP_SUBSTR(ec.passport_address, 'г\\.\\s*([^,\\s]+)')
+    `
+	if filter.StartDate != nil &&!filter.StartDate.IsZero() {
+		mainQuery = mainQuery+` AND eb.date_added >= '`+filter.StartDate.Format("2006-01-02")+`'`
+	}
+	if filter.EndDate != nil && !filter.EndDate.IsZero(){
+		mainQuery = mainQuery+` AND eb.date_added <= '`+filter.EndDate.Format("2006-01-02")+`'`
+	}
+
+	mainQuery += `         GROUP BY h.complex_name, REGEXP_SUBSTR(ec.passport_address, 'г\\.\\s*([^,\\s]+)')
      ) AS data
-     GROUP BY project_name
-     ORDER BY project_name"
-);
-    `)
+     GROUP BY name_of_projects
+     ORDER BY name_of_projects"
+);`
+
 
     if _, err := r.db.ExecContext(ctx, mainQuery); err != nil {
         return nil, fmt.Errorf("build main query: %w", err)
@@ -802,7 +843,7 @@ SET @sql = CONCAT(
             }
 
             valueStr := string(rawValue)
-            fmt.Printf("Processing column: %s, value: %s\n", col, valueStr) // Debugging statement
+            // fmt.Printf("Processing column: %s, value: %s\n", col, valueStr) // Debugging statement
 
             if num, err := strconv.Atoi(valueStr); err == nil {
                 rowData[col] = num
@@ -858,7 +899,7 @@ func (r *MySQLAudienceRepository) GetCallCenterReportData(ctx context.Context, f
         LEFT JOIN estate_buys_statuses_log ebsl ON eb.id = ebsl.estate_buy_id
         WHERE eb.company_id = 528 AND
         u.departments_id = 1903
-    `
+	`
 
 	orderClause := " GROUP BY u.users_name ORDER BY u.users_name DESC" // Default sorting
 
@@ -866,29 +907,29 @@ func (r *MySQLAudienceRepository) GetCallCenterReportData(ctx context.Context, f
 
 	whereConditions := []string{}
 
-	if filter.StartDate != nil &&
-		filter.EndDate != nil &&
-		!filter.StartDate.IsZero() &&
-		!filter.EndDate.IsZero() {
+	if filter.EndDate != nil && !filter.EndDate.IsZero(){
+		whereConditions = append(whereConditions, "eb.date_added <= ?")
+		args = append(args, filter.EndDate)
+	}
+
+	if filter.StartDate != nil && !filter.StartDate.IsZero(){
 			whereConditions = append(whereConditions, "eb.date_added >= ?")
 			args = append(args, filter.StartDate)
-			whereConditions = append(whereConditions, "eb.date_added <= ?")
-			args = append(args, filter.EndDate)
 	}
 
 	if len(whereConditions) > 0 {
 		query += " AND " + strings.Join(whereConditions, " AND ")
 	}
-	
+
 	query += orderClause
 	var metrics []domain.ManagerMetrics
-	
+
 	if err := r.db.SelectContext(ctx, &metrics, query, args...); err != nil {
 		return nil, fmt.Errorf("get sales metrics: %w", err)
 	}
 
-	// Calculate conversions and totals
-	totals := domain.ManagerMetrics{ManagerName: "Итого"}
+	// Calculate conversions and footer
+	footer := domain.ManagerMetrics{ManagerName: "Итого"}
 	for i := range metrics {
 		m := &metrics[i]
 
@@ -915,24 +956,24 @@ func (r *MySQLAudienceRepository) GetCallCenterReportData(ctx context.Context, f
 		//}
 
 		// Update totals
-		totals.TotalInquiries += m.TotalInquiries
-		totals.TargetInquiries += m.TargetInquiries
-		totals.AppointedVisits += m.AppointedVisits
-		totals.CompletedVisits += m.CompletedVisits
+		footer.TotalInquiries += m.TotalInquiries
+		footer.TargetInquiries += m.TargetInquiries
+		footer.AppointedVisits += m.AppointedVisits
+		footer.CompletedVisits += m.CompletedVisits
 		//totals.Bookings += m.Bookings
 		//totals.Contracts += m.Contracts
 	}
 
 	// Calculate total conversions
-	if totals.TotalInquiries > 0 {
-		totals.TargetConversion = float64(totals.TargetInquiries) / float64(totals.TotalInquiries) * 100
+	if footer.TotalInquiries > 0 {
+		footer.TargetConversion = float64(footer.TargetInquiries) / float64(footer.TotalInquiries) * 100
 	}
-	if totals.TargetInquiries > 0 {
-		totals.VisitConversion = float64(totals.AppointedVisits) / float64(totals.TargetInquiries) * 100
-		totals.LeadToVisit = float64(totals.CompletedVisits) / float64(totals.TargetInquiries) * 100
+	if footer.TargetInquiries > 0 {
+		footer.VisitConversion = float64(footer.AppointedVisits) / float64(footer.TargetInquiries) * 100
+		footer.LeadToVisit = float64(footer.CompletedVisits) / float64(footer.TargetInquiries) * 100
 	}
-	if totals.AppointedVisits > 0 {
-		totals.VisitSuccess = float64(totals.CompletedVisits) / float64(totals.AppointedVisits) * 100
+	if footer.AppointedVisits > 0 {
+		footer.VisitSuccess = float64(footer.CompletedVisits) / float64(footer.AppointedVisits) * 100
 	}
 
 	// Create headers
@@ -968,13 +1009,15 @@ func (r *MySQLAudienceRepository) GetCallCenterReportData(ctx context.Context, f
 	return &domain.CallCenterReport{
 		Headers: headers,
 		Data:    metrics,
-		Totals:  totals,
+		Footer:  footer,
 	}, nil
 }
 
-func sanitizeColumnName(name string) string {
-	// Replace non-alphanumeric chars with underscore
-	reg := regexp.MustCompile(`[^a-zA-Z0-9_]`)
-	safe := reg.ReplaceAllString(name, "_")
-	return fmt.Sprintf("region_%s", safe)
-}
+
+
+// func sanitizeColumnName(name string) string {
+// 	// Replace non-alphanumeric chars with underscore
+// 	reg := regexp.MustCompile(`[^a-zA-Z0-9_]`)
+// 	safe := reg.ReplaceAllString(name, "_")
+// 	return fmt.Sprintf("region_%s", safe)
+// }

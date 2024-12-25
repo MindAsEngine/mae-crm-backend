@@ -44,6 +44,7 @@ services:
 
   ads-integration-service:
     restart: unless-stopped
+    container_name: ads-integration-service
     build:
       context: ./ads-integration-service
       dockerfile: Dockerfile

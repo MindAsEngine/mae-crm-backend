@@ -246,8 +246,8 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 		s.logger.Info("filter", zap.Any("filter", filter))
 
 		audience.Filter = domain.AudienceCreationFilter{
-			CreationDateFrom:     filter.CreationDateFrom,
-			CreationDateTo:       filter.CreationDateTo,
+			StartDate:     filter.StartDate,
+			EndDate:       filter.EndDate,
 			StatusNames:          filter.StatusNames,
 			RegectionReasonNames: filter.RegectionReasonNames,
 			NonTargetReasonNames: filter.NonTargetReasonNames,
@@ -434,12 +434,12 @@ func (s *Service) GetCallCenterReport(ctx context.Context, filter *domain.CallCe
     }
 
     // Process anomalies
-    report.Anomalies = s.detectAnomalies(report.Data)
+    //report.Anomalies = s.detectAnomalies(report.Data)
 
     return report, nil
 }
 
-func (s *Service) ExportSalesReport(ctx context.Context, filter *domain.CallCenterReportFilter) (string, string, error) {
+func (s *Service) ExportCallCenterReport(ctx context.Context, filter *domain.CallCenterReportFilter) (string, string, error) {
     s.logger.Info("exporting call center report")
 
     report, err := s.mysqlRepo.GetCallCenterReportData(ctx, filter)

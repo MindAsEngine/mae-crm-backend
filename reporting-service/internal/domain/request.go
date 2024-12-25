@@ -14,8 +14,8 @@ type ApplicationFilterRequest struct {
 	ProjectName    string 	  `json:"project_name" form:"project_name"`
 	PropertyType   string 	  `json:"property_type" form:"property_type"`
 	AudienceName   string 	  `json:"audience_name" form:"audience_name"`
-	CreatedAtFrom  *time.Time `json:"created_at_from" form:"created_at_from"`
-	CreatedAtTo    *time.Time `json:"created_at_to" form:"created_at_to"`
+	StartDate      *time.Time `json:"created_at_from" form:"created_at_from"`
+	EndDate        *time.Time `json:"created_at_to" form:"created_at_to"`
 	DeadlinePassed bool       `json:"deadline_passed" form:"deadline_passed"`
 }
 
@@ -31,8 +31,8 @@ type AudienceMessage struct {
 type AudienceCreationFilter struct {
 	ID                   int64      `json:"id" db:"id"`
 	AudienceId           int64      `json:"audience_id" db:"audience_id"`
-	CreationDateFrom     *time.Time `json:"creation_date_from" db:"creation_date_from"`
-	CreationDateTo       *time.Time `json:"creation_date_to" db:"creation_date_to"`
+	StartDate    		 *time.Time `json:"creation_date_from" db:"creation_date_from"`
+	EndDate      		 *time.Time `json:"creation_date_to" db:"creation_date_to"`
 	StatusNames          []string   `json:"statuses" db:"status_names"`
 	StatusIDs            []int64    `json:"status_ids" db:"status_ids"`
 	RegectionReasonNames []string   `json:"rejection_reasons" db:"rejection_reasons"`
@@ -44,8 +44,8 @@ type AudienceFilter struct {}
 
 type RegionFilter struct {
 	Search    string    `json:"search"`
-	StartDate *time.Time `json:"start_date" validate:"required"`
-	EndDate   *time.Time `json:"end_date" validate:"required"`
+	StartDate *time.Time `json:"start_date" `
+	EndDate   *time.Time `json:"end_date"`
 	Sort      string    `json:"sort"` //
 }
 

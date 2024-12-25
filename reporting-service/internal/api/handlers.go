@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	//"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -245,8 +246,8 @@ func (h *Handler) ListApplications(w http.ResponseWriter, r *http.Request) {
 		PropertyType:   r.URL.Query().Get("property_type"),
 	}
 	if !time_from.IsZero() && !time_to.IsZero() {
-		filter.CreatedAtFrom = &time_from
-		filter.CreatedAtTo = &time_to
+		filter.StartDate = &time_from
+		filter.EndDate = &time_to
 	} 
 
 	if daysInStatus := r.URL.Query().Get("days_in_status"); daysInStatus != "" {
@@ -294,8 +295,8 @@ func (h *Handler) ExportApplications(w http.ResponseWriter, r *http.Request) {
 		PropertyType:   r.URL.Query().Get("property_type"),
 	}
 	if !time_from.IsZero() && !time_to.IsZero() {
-		filter.CreatedAtFrom = &time_from
-		filter.CreatedAtTo = &time_to
+		filter.StartDate = &time_from
+		filter.EndDate = &time_to
 	} 
 
 
@@ -327,7 +328,7 @@ func (h *Handler) GetRegions(w http.ResponseWriter, r *http.Request) {
 		Sort:   r.URL.Query().Get("sort"),
 	}
 
-	if startDate := r.URL.Query().Get("startDate"); startDate != "" {
+	if startDate := r.URL.Query().Get("start_date"); startDate != "" {
 		date, err := time.Parse(time.RFC3339, startDate)
 		if err != nil {
 			h.errorResponse(w, "invalid start date format", err, http.StatusBadRequest)
@@ -336,7 +337,7 @@ func (h *Handler) GetRegions(w http.ResponseWriter, r *http.Request) {
 		filter.StartDate = &date
 	}
 
-	if endDate := r.URL.Query().Get("endDate"); endDate != "" {
+	if endDate := r.URL.Query().Get("end_date"); endDate != "" {
 		date, err := time.Parse(time.RFC3339, endDate)
 		if err != nil {
 			h.errorResponse(w, "invalid end date format", err, http.StatusBadRequest)
@@ -415,7 +416,7 @@ func (h *Handler) ExportCallCenterReport(w http.ResponseWriter, r *http.Request)
 
 
     // Get exported file path
-    filePath, fileName, err := h.audienceService.ExportSalesReport(ctx, filter)
+    filePath, fileName, err := h.audienceService.ExportCallCenterReport(ctx, filter)
     if err != nil {
         h.errorResponse(w, "failed to export sales report", err, http.StatusInternalServerError)
         return

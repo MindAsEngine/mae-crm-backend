@@ -69,8 +69,8 @@ func (r *PostgresAudienceRepository) Create(ctx context.Context, audience *domai
 	`
 	err = tx.QueryRowxContext(ctx, query,
 		audience.ID,
-		audience.Filter.CreationDateFrom,
-		audience.Filter.CreationDateTo,
+		audience.Filter.StartDate,
+		audience.Filter.EndDate,
 		pq.Array(audience.Filter.StatusNames),
 		pq.Array(audience.Filter.StatusIDs),
 		pq.Array(audience.Filter.ReasonIDs),
@@ -159,8 +159,8 @@ func (r *PostgresAudienceRepository) GetFilterByAudienceId(ctx context.Context, 
 
 	rows := r.db.QueryRowContext(ctx, query, audience_id)
 	err = rows.Scan(
-		&filter.CreationDateFrom,
-		&filter.CreationDateTo,
+		&filter.StartDate,
+		&filter.EndDate,
 		pq.Array(&filter.StatusNames),
 		pq.Array(&filter.RegectionReasonNames),
 		pq.Array(&filter.NonTargetReasonNames),

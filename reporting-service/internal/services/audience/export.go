@@ -122,13 +122,13 @@ func (e *ExcelExporter) ExportAudience(ctx context.Context, audienceID int64) (s
 	// Add filter info
 	f.SetCellValue(infoSheet, "A7", "Filter Settings")
 	f.SetCellValue(infoSheet, "A8", "Date From")
-	if filter.CreationDateFrom != nil {
-		f.SetCellValue(infoSheet, "B8", filter.CreationDateFrom.Format(time.RFC3339))
+	if filter.StartDate != nil {
+		f.SetCellValue(infoSheet, "B8", filter.StartDate.Format(time.RFC3339))
 	}
 
 	f.SetCellValue(infoSheet, "A9", "Date To")
-	if filter.CreationDateTo != nil {
-		f.SetCellValue(infoSheet, "B9", filter.CreationDateTo.Format(time.RFC3339))
+	if filter.EndDate != nil {
+		f.SetCellValue(infoSheet, "B9", filter.EndDate.Format(time.RFC3339))
 	}
 
 	f.SetCellValue(infoSheet, "A10", "Status Names")
@@ -339,14 +339,14 @@ func (e *ExcelExporter) ExportCallCenterReport(report *domain.CallCenterReport) 
 
     totals := []interface{}{
         "ИТОГО",
-        report.Totals.TotalInquiries,
-        report.Totals.TargetInquiries,
-        report.Totals.TargetConversion / 100,
-        report.Totals.AppointedVisits,
-        report.Totals.VisitConversion / 100,
-        report.Totals.CompletedVisits,
-        report.Totals.VisitSuccess / 100,
-        report.Totals.LeadToVisit / 100,
+        report.Footer.TotalInquiries,
+        report.Footer.TargetInquiries,
+        report.Footer.TargetConversion / 100,
+        report.Footer.AppointedVisits,
+        report.Footer.VisitConversion / 100,
+        report.Footer.CompletedVisits,
+        report.Footer.VisitSuccess / 100,
+        report.Footer.LeadToVisit / 100,
     }
 
     //if len(report.Headers) > 9 {
@@ -370,17 +370,17 @@ func (e *ExcelExporter) ExportCallCenterReport(report *domain.CallCenterReport) 
     }
 
     // Add anomalies sheet if present
-    if len(report.Anomalies) > 0 {
-        f.NewSheet("Anomalies")
-        f.SetCellValue("Anomalies", "A1", "Обнаруженные аномалии")
-        f.SetCellStyle("Anomalies", "A1", "A1", headerStyle)
-        
-        for i, anomaly := range report.Anomalies {
-            f.SetCellValue("Anomalies", fmt.Sprintf("A%d", i+2), anomaly)
-        }
-        
-        f.SetColWidth("Anomalies", "A", "A", 50)
-    }
+    //if len(report.Anomalies) > 0 {
+    //    f.NewSheet("Anomalies")
+    //    f.SetCellValue("Anomalies", "A1", "Обнаруженные аномалии")
+    //    f.SetCellStyle("Anomalies", "A1", "A1", headerStyle)
+    //    
+    //    for i, anomaly := range report.Anomalies {
+    //        f.SetCellValue("Anomalies", fmt.Sprintf("A%d", i+2), anomaly)
+    //    }
+    //    
+    //    f.SetColWidth("Anomalies", "A", "A", 50)
+    //}
 
     // Save file
     fileName := fmt.Sprintf("sales_report_%s.xlsx", 
