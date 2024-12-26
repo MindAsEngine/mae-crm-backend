@@ -55,6 +55,8 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 	
 	api.HandleFunc("/call-center", h.GetCallCenterReport).Methods(http.MethodGet)
 	api.HandleFunc("/call-center/export", h.ExportCallCenterReport).Methods(http.MethodGet)
+
+	api.HandleFunc("/speed", h.GetStatusDurationReport).Methods(http.MethodGet)
 }
 
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
@@ -358,8 +360,8 @@ func (h *Handler) GetRegions(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetCallCenterReport(w http.ResponseWriter, r *http.Request) {
     ctx := r.Context()
 
-	time_from := time.Time{}
-	time_to := time.Time{}
+	time_from := time.Now().AddDate(-1, 0, 0)
+	time_to := time.Now()
     err:= error(nil)
 	if r.URL.Query().Get("start_date") != "" {
 		time_from, err = time.Parse(time.RFC3339, r.URL.Query().Get("start_date"))
@@ -429,6 +431,50 @@ func (h *Handler) ExportCallCenterReport(w http.ResponseWriter, r *http.Request)
     w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
 	http.ServeFile(w, r, filePath)
+}
+
+func (h *Handler) GetStatusDurationReport(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	time_from := time.Time{}
+	time_to := time.Time{}
+    err:= error(nil)
+	if r.URL.Query().Get("start_date") != "" {
+		time_from, err = time.Parse(time.RFC3339, r.URL.Query().Get("start_date"))
+		if err != nil  {
+			h.errorResponse(w, "invalid date_from format", err, http.StatusBadRequest)
+			return
+		}
+	}
+	if r.URL.Query().Get("end_date") != "" {
+		time_to, err = time.Parse(time.RFC3339, r.URL.Query().Get("end_date"))
+		if err != nil {
+			h.errorResponse(w, "invalid date_to format", err, http.StatusBadRequest)
+			return
+		}
+	}
+	trashold := 0
+	if r.URL.Query().Get("over_threshold") != "" {
+		trashold, err = strconv.Atoi(r.URL.Query().Get("over_threshold"))
+		if err != nil {
+			h.errorResponse(w, "invalid over_threshold format", err, http.StatusBadRequest)
+			return
+		}
+	}
+
+	filter := &domain.StatusDurationFilter{
+		StartDate: &time_from,
+		EndDate:   &time_to,
+		ThresholdDays: trashold,
+	}
+
+	response, err := h.audienceService.GetSpeedReport(ctx, filter)
+	if err != nil {
+		h.errorResponse(w, "failed to get status duration report", err, http.StatusInternalServerError)
+		return
+	}
+
+	h.jsonResponse(w, response, http.StatusOK)
 }
 
 func (h *Handler) errorResponse(w http.ResponseWriter, message string, err error, code int) {

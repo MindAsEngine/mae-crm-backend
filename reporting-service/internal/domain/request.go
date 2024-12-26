@@ -63,3 +63,9 @@ type PaginationRequest struct {
 	Page     int `json:"page" form:"page"`
 	PageSize int `json:"page_size" form:"page_size"`
 }
+
+type StatusDurationFilter struct {
+    StartDate   *time.Time `json:"start_date"`
+    EndDate     *time.Time `json:"end_date"`
+    ThresholdDays int      `json:"threshold_days"`
+}

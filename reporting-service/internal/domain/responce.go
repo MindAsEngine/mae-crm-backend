@@ -48,16 +48,23 @@ type IntegrationsCreateResponse struct {
 
 //region report
 type Header struct {
-	Name         string `json:"name"`
-	IsID         bool   `json:"is_id"`
-	Title        string `json:"title"`
-	IsVisible    bool   `json:"is_visible"`
-	IsAdditional bool   `json:"is_additional"`
-	Format       string `json:"format"`
+	Name          string `json:"name"`
+	IsAsideHeader bool   `json:"is_aside_header"`
+	IsID          bool   `json:"is_id"`
+	Title         string `json:"title"`
+	IsVisible     bool   `json:"is_visible"`
+	IsAdditional  bool   `json:"is_additional"`
+	Format        string `json:"format"`
 }
 
 type RegionsResponse struct {
 	Headers []Header                 `json:"headers"`
 	Data    []map[string]interface{} `json:"data"`
+	Footer  map[string]interface{}   `json:"footer"`
+}
+
+type StatusDurationResponse struct {
+    Headers []Header         `json:"headers"`
+    Data    []map[string]interface{} `json:"data"`
 	Footer  map[string]interface{}   `json:"footer"`
 }

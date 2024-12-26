@@ -31,18 +31,6 @@ type RegionReportRow struct {
 	Purchases    int    `db:"purchases"`
 }
 
-// Фильтр для отчета по скорости обработки
-type SpeedReportFilter struct {
-	StartDate time.Time
-	EndDate   time.Time
-}
-
-// Строка отчета по скорости обработки
-type SpeedReportRow struct {
-	Status          string  `db:"status"`
-	AvgDurationHours float64 `db:"avg_duration_hours"`
-}
-
 // Фильтр для отчета по колл-центру
 type CallCenterReportFilter struct {
 	StartDate *time.Time  `json:"start_date"`

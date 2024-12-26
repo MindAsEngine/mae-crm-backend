@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
+	"time"
+
 	//"regexp"
 	"strconv"
 
@@ -471,6 +473,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 		{
 			Name:         "id",
 			IsID:         true,
+			IsAsideHeader: false,
 			Title:        "ID",
 			IsVisible:    true,
 			IsAdditional: false,
@@ -487,6 +490,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 		{
 			Name:         "name",
 			IsID:         false,
+			IsAsideHeader: true,
 			Title:        "ФИО",
 			IsVisible:    true,
 			IsAdditional: false,
@@ -495,6 +499,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 		{
 			Name:         "status_name",
 			IsID:         false,
+			IsAsideHeader: false,
 			Title:        "Этап",
 			IsVisible:    true,
 			IsAdditional: false,
@@ -503,6 +508,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 		{
 			Name:         "phone",
 			IsID:         false,
+			IsAsideHeader: false,
 			Title:        "Номер телефона",
 			IsVisible:    true,
 			IsAdditional: false,
@@ -511,6 +517,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 		{
 			Name:         "manager_name",
 			IsID:         false,
+			IsAsideHeader: false,
 			Title:        "Посредник",
 			IsVisible:    true,
 			IsAdditional: false,
@@ -519,6 +526,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 		{
 			Name:         "property_type",
 			IsID:         false,
+			IsAsideHeader: false,
 			Title:        "Тип недвижимости",
 			IsVisible:    true,
 			IsAdditional: false,
@@ -799,14 +807,15 @@ SET @sql = CONCAT(
 
     // Prepare headers
     headers := []domain.Header{
-        {Name: "id", IsID: true, Title: "№", IsVisible: false, IsAdditional: false, Format: "number"},
-        {Name: "name_of_projects", Title: "Наименование проектов", IsVisible: true, IsAdditional: false, Format: "string"},
+        {Name: "id", IsID: true, Title: "№", IsVisible: false, IsAsideHeader: false, IsAdditional: false, Format: "number"},
+        {Name: "name_of_projects", Title: "Наименование проектов", IsAsideHeader: true, IsVisible: true, IsAdditional: false, Format: "string"},
     }
 
     for i := 2; i < len(columns); i++ {
         headers = append(headers, domain.Header{
             Name:         columns[i],
             Title:        columns[i],
+			IsAsideHeader: false,
             IsVisible:    true,
             IsAdditional: true,
             Format:       "number",
@@ -935,14 +944,14 @@ func (r *MySQLAudienceRepository) GetCallCenterReportData(ctx context.Context, f
 
 		// Calculate basic conversions
 		if m.TotalInquiries > 0 {
-			m.TargetConversion = float64(m.TargetInquiries) / float64(m.TotalInquiries) * 100
+			m.TargetConversion = float64(m.TargetInquiries) / float64(m.TotalInquiries)// * 100
 		}
 		if m.TargetInquiries > 0 {
-			m.VisitConversion = float64(m.AppointedVisits) / float64(m.TargetInquiries) * 100
-			m.LeadToVisit = float64(m.CompletedVisits) / float64(m.TargetInquiries) * 100
+			m.VisitConversion = float64(m.AppointedVisits) / float64(m.TargetInquiries)// * 100
+			m.LeadToVisit = float64(m.CompletedVisits) / float64(m.TargetInquiries)// * 100
 		}
 		if m.AppointedVisits > 0 {
-			m.VisitSuccess = float64(m.CompletedVisits) / float64(m.AppointedVisits) * 100
+			m.VisitSuccess = float64(m.CompletedVisits) / float64(m.AppointedVisits)// * 100
 		}
 
 		//if m.CompletedVisits > 0 {
@@ -966,27 +975,27 @@ func (r *MySQLAudienceRepository) GetCallCenterReportData(ctx context.Context, f
 
 	// Calculate total conversions
 	if footer.TotalInquiries > 0 {
-		footer.TargetConversion = float64(footer.TargetInquiries) / float64(footer.TotalInquiries) * 100
+		footer.TargetConversion = float64(footer.TargetInquiries) / float64(footer.TotalInquiries)// * 100
 	}
 	if footer.TargetInquiries > 0 {
-		footer.VisitConversion = float64(footer.AppointedVisits) / float64(footer.TargetInquiries) * 100
-		footer.LeadToVisit = float64(footer.CompletedVisits) / float64(footer.TargetInquiries) * 100
+		footer.VisitConversion = float64(footer.AppointedVisits) / float64(footer.TargetInquiries)// * 100
+		footer.LeadToVisit = float64(footer.CompletedVisits) / float64(footer.TargetInquiries)// * 100
 	}
 	if footer.AppointedVisits > 0 {
-		footer.VisitSuccess = float64(footer.CompletedVisits) / float64(footer.AppointedVisits) * 100
+		footer.VisitSuccess = float64(footer.CompletedVisits) / float64(footer.AppointedVisits)// * 100
 	}
 
 	// Create headers
 	headers := []domain.Header{
-		{Name: "manager_name", Title: "ФИО менеджера", IsVisible: true, IsAdditional: true, Format: "string"},
-		{Name: "total_inquiries", Title: "Всего обращений", IsVisible: true, IsAdditional: true, Format: "number"},
-		{Name: "target_inquiries", Title: "Целевые", IsVisible: true, IsAdditional: true, Format: "number"},
-		{Name: "target_conversion", Title: "Конверсия в целевые", IsVisible: true, IsAdditional: true, Format: "percent"},
-		{Name: "appointed_visits", Title: "Назначено визитов", IsVisible: true, IsAdditional: true, Format: "number"},
-		{Name: "visit_conversion", Title: "Конверсия в визиты", IsVisible: true, IsAdditional: true, Format: "percent"},
-		{Name: "completed_visits", Title: "Визиты состоялись", IsVisible: true, IsAdditional: true, Format: "number"},
-		{Name: "visit_success", Title: "Конверсия визитов", IsVisible: true, IsAdditional: true, Format: "percent"},
-		{Name: "lead_to_visit", Title: "Конверсия лид->визит", IsVisible: true, IsAdditional: true, Format: "percent"},
+		{Name: "manager_name", IsAsideHeader: true, Title: "ФИО менеджера", IsVisible: true, IsAdditional: false, Format: "string"},
+		{Name: "total_inquiries", IsAsideHeader: false, Title: "Всего обращений", IsVisible: true, IsAdditional: true, Format: "number"},
+		{Name: "target_inquiries", IsAsideHeader: false, Title: "Целевые", IsVisible: true, IsAdditional: false, Format: "number"},
+		{Name: "target_conversion", IsAsideHeader: false, Title: "Конверсия в целевые", IsVisible: true, IsAdditional: false, Format: "percent"},
+		{Name: "appointed_visits", IsAsideHeader: false, Title: "Назначено визитов", IsVisible: true, IsAdditional: false, Format: "number"},
+		{Name: "visit_conversion", IsAsideHeader: false, Title: "Конверсия в визиты", IsVisible: true, IsAdditional: false, Format: "percent"},
+		{Name: "completed_visits", IsAsideHeader: false, Title: "Визиты состоялись", IsVisible: true, IsAdditional: false, Format: "number"},
+		{Name: "visit_success", IsAsideHeader: false, Title: "Конверсия визитов", IsVisible: true, IsAdditional: false, Format: "percent"},
+		{Name: "lead_to_visit", IsAsideHeader: false, Title: "Конверсия лид->визит", IsVisible: true, IsAdditional: false, Format: "percent"},
 
 		//{Name: "bookings", Title: "Бронирования", IsVisible: true, IsAdditional: true, Format: "number"},
 		//{Name: "visit_to_booking", Title: "Конверсия визит->бронь", IsVisible: true, IsAdditional: true, Format: "percent"},
@@ -1012,6 +1021,119 @@ func (r *MySQLAudienceRepository) GetCallCenterReportData(ctx context.Context, f
 		Footer:  footer,
 	}, nil
 }
+
+func (r *MySQLAudienceRepository) GetStatusDurationReport(ctx context.Context, filter *domain.StatusDurationFilter) (*domain.StatusDurationResponse, error) {
+    query := `
+        WITH StatusDurations AS (
+            SELECT 
+                sl.status_to_name as status_name,
+                sl.estate_buy_id,
+                TIMESTAMPDIFF(DAY, 
+                    sl.log_date,
+                    COALESCE(
+                        LEAD(sl.log_date) OVER (PARTITION BY sl.estate_buy_id ORDER BY sl.log_date),
+                        NOW()
+                    )
+                ) as days_in_status
+            FROM estate_buys_statuses_log sl
+            WHERE sl.company_id = 528
+            AND sl.log_date BETWEEN ? AND ?
+        )
+        SELECT 
+            status_name,
+            AVG(days_in_status) as avg_days,
+            COUNT(DISTINCT estate_buy_id) as total_requests,
+            SUM(CASE WHEN days_in_status > ? THEN 1 ELSE 0 END) as over_threshold
+        FROM StatusDurations
+        GROUP BY status_name
+        ORDER BY avg_days DESC
+    `
+    // Подготовка аргументов для SQL-запроса
+    args := []interface{}{}
+    if filter.EndDate != nil && !filter.EndDate.IsZero() {
+        args = append(args, filter.EndDate.Format("2006-01-02"))
+    } else {
+        args = append(args, time.Now().AddDate(-1, 0, 0).Format("2006-01-02"))
+    }
+
+    if filter.StartDate != nil && !filter.StartDate.IsZero() {
+        args = append(args, filter.StartDate.Format("2006-01-02"))
+    } else {
+        args = append(args, time.Now().Format("2006-01-02"))
+    }
+
+    if filter.ThresholdDays <= 0 {
+        filter.ThresholdDays = 1
+    }
+    args = append(args, filter.ThresholdDays)
+
+    // Выполняем запрос к базе данных
+    rows, err := r.db.QueryContext(ctx, query, args...)
+    if err != nil {
+        return nil, fmt.Errorf("query status durations: %w", err)
+    }
+    defer rows.Close()
+
+    // Переменные для хранения результатов
+    statusMap := make(map[string]domain.StatusDuration)
+    var totalRequests int
+    avgDaysMap := make(map[string]float64)
+
+    for rows.Next() {
+        var status domain.StatusDuration
+        if err := rows.Scan(&status.StatusName, &status.AverageDays, &status.TotalRequests, &status.OverThreshold); err != nil {
+            return nil, fmt.Errorf("scan result: %w", err)
+        }
+        statusMap[status.StatusName] = status
+        totalRequests += status.TotalRequests
+        avgDaysMap[status.StatusName] = status.AverageDays
+    }
+    if err := rows.Err(); err != nil {
+        return nil, fmt.Errorf("rows error: %w", err)
+    }
+
+    // Формируем заголовки
+    headers := []domain.Header{
+        {Name: "id", Title: "№", IsVisible: false,  IsID : true, Format: "number"},
+        {Name: "status_name", Title: "Наименование статуса", IsVisible: true, IsID: false, Format: "string"},
+    }
+    for statusName := range statusMap {
+        headers = append(headers, domain.Header{
+            Name:         statusName,
+            Title:        statusName,
+            IsVisible:    true,
+            IsAdditional: true,
+            Format:       "number",
+        })
+    }
+
+    // Формируем данные
+    data := []map[string]interface{}{
+        {
+            "id":          1,
+            "status_name": "Количество заявок",
+        },
+    }
+    for statusName, status := range statusMap {
+        data[0][statusName] = status.TotalRequests
+    }
+
+    // Формируем футер
+    footer := map[string]interface{}{
+        "id":          0,
+        "status_name": "Среднее время",
+    }
+    for statusName, avgDays := range avgDaysMap {
+        footer[statusName] = fmt.Sprintf("%.0f дней", avgDays)
+    }
+
+    return &domain.StatusDurationResponse{
+        Headers: headers,
+        Data:    data,
+        Footer:  footer,
+    }, nil
+}
+
 
 
 

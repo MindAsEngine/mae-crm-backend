@@ -455,6 +455,18 @@ func (s *Service) ExportCallCenterReport(ctx context.Context, filter *domain.Cal
     return filePath, fileName, nil
 }
 
+func (s *Service) GetSpeedReport(ctx context.Context, filter *domain.StatusDurationFilter) (*domain.StatusDurationResponse, error) {
+	s.logger.Info("getting speed report")
+
+	report, err := s.mysqlRepo.GetStatusDurationReport(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("get speed report: %w", err)
+	}
+
+	return report, nil
+}
+
+
 func (s *Service) detectAnomalies(data []domain.ManagerMetrics) []string {
     var anomalies []string
     

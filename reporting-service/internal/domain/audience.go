@@ -44,3 +44,10 @@ type Integration struct {
 	CreatedAt   string `json:"created_at" db:"created_at"`
 	UpdatedAt   string `json:"updated_at" db:"updated_at"`
 }
+
+type StatusDuration struct {
+    StatusName     string  `json:"status_name" db:"status_name"`
+    AverageDays    float64 `json:"average_days" db:"avg_days"`
+    TotalRequests  int     `json:"total_requests" db:"total_requests"`
+    OverThreshold  int     `json:"over_threshold" db:"over_threshold"`
+}
