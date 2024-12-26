@@ -142,10 +142,10 @@ func main() {
     updateInterval := 24 * time.Hour
     startHour := 1
 
-    if cfg.Service.TestMode {
-        updateInterval = 30 * time.Minute  // Test every n minutes
-        startHour = time.Now().Hour()     // Start from current hour
-    }
+    // if cfg.Service.TestMode {
+    //     updateInterval = 30 * time.Minute  // Test every n minutes
+    //     startHour = time.Now().Hour()     // Start from current hour
+    // }
 
     //Start daily update scheduler
     go func() {
