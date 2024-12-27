@@ -396,6 +396,22 @@ func (r *PostgresAudienceRepository) GetApplicationIdsByAdienceId(ctx context.Co
 	return ids, nil
 }
 
+func(r *PostgresAudienceRepository) GetApplicationIdsByAudienceName(ctx context.Context, name string) ([]int64, error) {
+	var ids []int64
+	query := `
+		SELECT 
+			ar.request_id
+		FROM audience_requests ar
+		JOIN audiences a ON ar.audience_id = a.id
+		WHERE a.name = $1`
+
+	if err := r.db.SelectContext(ctx, &ids, query, name); err != nil {
+		return nil, fmt.Errorf("select ids: %w", err)
+	}
+
+	return ids, nil
+}
+
 func (r *PostgresAudienceRepository) DeleteApplications(ctx context.Context, audienceID int64, application_ids []int64) error {
 
 	for _, app := range application_ids {

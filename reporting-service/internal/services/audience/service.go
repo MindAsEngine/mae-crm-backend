@@ -220,6 +220,12 @@ func (s *Service) UpdateAudience(ctx context.Context, id int64, application_ids 
 }
 
 func (s *Service) ListApplications(ctx context.Context, pagination *domain.PaginationRequest, filter *domain.ApplicationFilterRequest) (*domain.PaginationResponse, error) {
+	audienceApplicationIDs, err := s.audienceRepo.GetApplicationIdsByAudienceName(ctx, filter.AudienceName)
+
+	if audienceApplicationIDs !=nil && err != nil {
+		filter.AudienceIDs = audienceApplicationIDs
+	}
+	
 	response, err := s.mysqlRepo.ListApplicationsWithFilters(ctx, pagination, filter)
 	if err != nil {
 		return nil, fmt.Errorf("get applications: %w", err)

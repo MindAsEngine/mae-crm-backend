@@ -390,6 +390,16 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 		args["created_at_from"] = filter.StartDate
 	}
 
+	if filter.AudienceIDs != nil {
+		whereConditions = append(whereConditions, "eb.id IN (:audience_ids)")
+		args["audience_ids"] = filter.AudienceIDs
+	}
+	// //BAD CODE DOWN 
+	// if filter.AudienceName != "" {
+	// 	whereConditions = append(whereConditions, "edc.contacts_buy_name = :audience_name")
+	// 	args["audience_name"] = filter.AudienceName
+	// }
+
 	if len(whereConditions) > 0 {
 		countQuery += " AND " + strings.Join(whereConditions, " AND ")
 	}
@@ -473,11 +483,20 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 		{
 			Name:         "id",
 			IsID:         true,
-			IsAsideHeader: false,
+			IsAsideHeader: true,
 			Title:        "ID",
 			IsVisible:    true,
 			IsAdditional: false,
 			Format:       "number",
+		},
+		{
+			Name:         "name",
+			IsID:         false,
+			IsAsideHeader: false,
+			Title:        "ФИО",
+			IsVisible:    true,
+			IsAdditional: false,
+			Format:       "string",
 		},
 		{
 			Name:         "created_at",
@@ -486,15 +505,6 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 			IsVisible:    true,
 			IsAdditional: false,
 			Format:       "date",
-		},
-		{
-			Name:         "name",
-			IsID:         false,
-			IsAsideHeader: true,
-			Title:        "ФИО",
-			IsVisible:    true,
-			IsAdditional: false,
-			Format:       "string",
 		},
 		{
 			Name:         "status_name",
@@ -765,6 +775,10 @@ SET @sql = CONCAT(
              AND ec.passport_address != ''
              AND es.estate_sell_status_name = 'Сделка проведена' OR es.estate_sell_status_name = 'Сделка в работе'
     `
+	if filter.Project != "" {
+		mainQuery = mainQuery+` AND h.complex_name = '`+filter.Project+`'`
+	}
+
 	if filter.StartDate != nil &&!filter.StartDate.IsZero() {
 		mainQuery = mainQuery+` AND eb.date_added >= '`+filter.StartDate.Format("2006-01-02")+`'`
 	}
@@ -807,7 +821,7 @@ SET @sql = CONCAT(
 
     // Prepare headers
     headers := []domain.Header{
-        {Name: "id", IsID: true, Title: "№", IsVisible: false, IsAsideHeader: false, IsAdditional: false, Format: "number"},
+        //{Name: "id", IsID: true, Title: "№", IsVisible: false, IsAsideHeader: false, IsAdditional: false, Format: "number"},
         {Name: "name_of_projects", Title: "Наименование проектов", IsAsideHeader: true, IsVisible: true, IsAdditional: false, Format: "string"},
     }
 
@@ -825,7 +839,7 @@ SET @sql = CONCAT(
     // Process rows
     var data []map[string]interface{}
     footer := map[string]int{
-        "id":             0,
+        "id":                0,
         "name_of_projects": -1,
     }
 
@@ -922,8 +936,8 @@ func (r *MySQLAudienceRepository) GetCallCenterReportData(ctx context.Context, f
 	}
 
 	if filter.StartDate != nil && !filter.StartDate.IsZero(){
-			whereConditions = append(whereConditions, "eb.date_added >= ?")
-			args = append(args, filter.StartDate)
+		whereConditions = append(whereConditions, "eb.date_added >= ?")
+		args = append(args, filter.StartDate)
 	}
 
 	if len(whereConditions) > 0 {

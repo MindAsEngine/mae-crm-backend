@@ -244,8 +244,10 @@ func (h *Handler) ListApplications(w http.ResponseWriter, r *http.Request) {
 		OrderField:     r.URL.Query().Get("order_field"),
 		OrderDirection: r.URL.Query().Get("order_direction"),
 		Status:         r.URL.Query().Get("status"),
-		ProjectName:    r.URL.Query().Get("project_name"),
+		ProjectName:    r.URL.Query().Get("project"),
 		PropertyType:   r.URL.Query().Get("property_type"),
+		AudienceName:   r.URL.Query().Get("audience"),
+		RegionName:     r.URL.Query().Get("region"),
 	}
 	if !time_from.IsZero() && !time_to.IsZero() {
 		filter.StartDate = &time_from
@@ -326,8 +328,9 @@ func (h *Handler) GetRegions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	filter := &domain.RegionFilter{
-		Search: r.URL.Query().Get("search"),
-		Sort:   r.URL.Query().Get("sort"),
+		Search:  r.URL.Query().Get("search"),
+		Sort:    r.URL.Query().Get("sort"),
+		Project: r.URL.Query().Get("project"),
 	}
 
 	if startDate := r.URL.Query().Get("start_date"); startDate != "" {
@@ -346,6 +349,10 @@ func (h *Handler) GetRegions(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		filter.EndDate = &date
+	}
+
+	if project := r.URL.Query().Get("project"); project != "" {
+		
 	}
 
 	response, err := h.audienceService.GetRegions(ctx, filter)

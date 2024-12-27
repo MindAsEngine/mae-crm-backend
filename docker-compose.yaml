@@ -148,17 +148,17 @@ services:
   #   networks:
   #     - app-network
 
-#  Redis
-#   redis:
-#     restart: unless-stopped
-#     image: redis:7
-#     container_name: redis
-#     volumes:
-#       - redis_data:/data
-#     ports:
-#       - "6379:6379"
-#     networks:
-#       - app-network
+  #  Redis
+  #   redis:
+  #     restart: unless-stopped
+  #     image: redis:7
+  #     container_name: redis
+  #     volumes:
+  #       - redis_data:/data
+  #     ports:
+  #       - "6379:6379"
+  #     networks:
+  #       - app-network
 
 
 volumes:

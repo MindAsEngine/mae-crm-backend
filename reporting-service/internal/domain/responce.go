@@ -21,7 +21,7 @@ type ErrorResponse struct {
 type ApplicationFilterResponce struct {
 	//OrderField     string 	  `json:"order_field"`
 	//OrderDirection string 	  `json:"order_direction"`
-	Statuses []string `json:"status_names" form:"status_names"`
+	Statuses      []string `json:"status_names" form:"status_names"`
 	//StatusDuration int64  	  `json:"status_duration,omitempty" form:"status_duration"`
 	ProjectNames  []string `json:"project_names" form:"project_names"`
 	PropertyTypes []string `json:"property_types" form:"property_types"`
@@ -33,9 +33,9 @@ type ApplicationFilterResponce struct {
 
 //audience reports
 type AudienceResponse struct {
-	ID           int64         `json:"id"`
-	Name         string        `json:"name"`
-	Integrations []Integration `json:"integrations"`
+	ID                 int64         `json:"id"`
+	Name               string        `json:"name"`
+	Integrations       []Integration `json:"integrations"`
 	//Application_ids    []int64       `json:"application_ids"`
 	Applications_count int       `json:"application_count"`
 	CreatedAt          time.Time `json:"created_at"`
@@ -54,6 +54,7 @@ type Header struct {
 	Title         string `json:"title"`
 	IsVisible     bool   `json:"is_visible"`
 	IsAdditional  bool   `json:"is_additional"`
+	IsSortable    bool   `json:"is_sortable"`
 	Format        string `json:"format"`
 }
 
@@ -64,7 +65,7 @@ type RegionsResponse struct {
 }
 
 type StatusDurationResponse struct {
-    Headers []Header         `json:"headers"`
+    Headers []Header                 `json:"headers"`
     Data    []map[string]interface{} `json:"data"`
 	Footer  map[string]interface{}   `json:"footer"`
 }
