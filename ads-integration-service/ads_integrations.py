@@ -247,19 +247,26 @@ class YandexIntegration:
         if response.status_code != 200:
             logger.error(f"Ошибка получения все аудиторий Яндекс.Аудитории: {response.text}")
             raise Exception(f"Ошибка получения все аудиторий Яндекс.Аудитории: {response.text}")
-        logger.debug(f"Получены аудитории Яндекс.Аудитории: {response.status_code}")
+        logger.debug(f"Получены аудитории Яндекс.Аудитории: {response.json()}")
         return response.json()
 
     def update_name(self, audience_id, name):
-        response = requests.put(
-            url=self.base_url + f'/{audience_id}',
+        response = requests.post(
+            url=self.base_url + f'/{audience_id}/confirm',
             headers=self.headers,
-            json={"segment": {"name": name}}
+            json={"segment":
+                      {
+                          "name": name,
+                          "content_type": "crm",
+                          "id": audience_id,
+                          "hashing_alg": "SHA256",
+                          "hashed": True,
+                              }}
         )
         if response.status_code != 200:
             logger.error(f"Ошибка обновления имени аудитории Яндекс.Аудитории: {response.text}")
             raise Exception(f"Ошибка обновления имени аудитории Яндекс.Аудитории: {response.text}")
-        print(f"Имя аудитории успешно обновлено: {name}")
+        print(f"Имя аудитории успешно обновлено: {name} {response.text}")
         logger.debug(f"Имя аудитории успешно обновлено: {name}")
         return name
 
