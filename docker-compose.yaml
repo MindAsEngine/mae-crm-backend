@@ -2,22 +2,42 @@ version: '3'
 
 services:
 
-  frontend:
-    restart: unless-stopped
-    build:
-      context: ./mae-crm-frontend
-      dockerfile: Dockerfile
-    container_name: frontend
+  # frontend:
+  #   restart: unless-stopped
+  #   build:
+  #     context: ./mae-crm-frontend
+  #     dockerfile: Dockerfile
+  #   container_name: frontend
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - ./mae-crm-frontend/src:/app/src
+  #     - ./mae-crm-frontend/public:/app/public
+  #   networks:
+  #     - app-network
+
+  mongodb:
+    image: mongo:6
+    container_name: mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: secret
     ports:
-      - "3000:3000"
-    volumes:
-      - ./mae-crm-frontend/src:/app/src
-      - ./mae-crm-frontend/public:/app/public
-    networks:
-      - app-network
+      - "27017:27017"
+
+  auth-service:
+    build: ./auth-service
+    container_name: auth-service
+    depends_on:
+      - mongodb
+    environment:
+      PORT: 8081
+      MONGO_URI: "mongodb://root:secret@mongodb:27017"
+    ports:
+      - "8081:8081"
 
   # Reporting Service
-  reporting-service:
+  reporting-service:     
     restart: unless-stopped
     build:
       context: ./reporting-service
@@ -41,7 +61,9 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
-
+      auth-service:
+        condition: service_started
+  
   ads-integration-service:
     restart: unless-stopped
     container_name: ads-integration-service

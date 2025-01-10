@@ -22,6 +22,7 @@ type Application struct {
 	PropertyType   string    `json:"property_type" db:"property_type"`
 	ProjectName    string    `json:"project_name" db:"project_name"`
 	StatusDuration int64     `json:"days_in_status" db:"days_in_status"`
+	RegionName 	   string    `json:"region" db:"region"`
 }
 
 type Audience struct {

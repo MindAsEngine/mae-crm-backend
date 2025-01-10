@@ -51,12 +51,13 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 	api.HandleFunc("/applications/export", h.ExportApplications).Methods(http.MethodGet)
 	
 	api.HandleFunc("/regions", h.GetRegions).Methods(http.MethodGet)
-	api.HandleFunc("/regions/export", h.GetRegions).Methods(http.MethodGet)
+	api.HandleFunc("/regions/export", h.ExportRegions).Methods(http.MethodGet)
 	
 	api.HandleFunc("/call-center", h.GetCallCenterReport).Methods(http.MethodGet)
 	api.HandleFunc("/call-center/export", h.ExportCallCenterReport).Methods(http.MethodGet)
 
 	api.HandleFunc("/speed", h.GetStatusDurationReport).Methods(http.MethodGet)
+	//api.HandleFunc("/speed/export", h.ExportStatusDurationReport).Methods(http.MethodGet)
 }
 
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
@@ -244,17 +245,19 @@ func (h *Handler) ListApplications(w http.ResponseWriter, r *http.Request) {
 		OrderField:     r.URL.Query().Get("order_field"),
 		OrderDirection: r.URL.Query().Get("order_direction"),
 		Status:         r.URL.Query().Get("status"),
-		ProjectName:    r.URL.Query().Get("project"),
+		ProjectName:    r.URL.Query().Get("project_name"),
 		PropertyType:   r.URL.Query().Get("property_type"),
-		AudienceName:   r.URL.Query().Get("audience"),
+		AudienceName:   r.URL.Query().Get("audience_name"),
 		RegionName:     r.URL.Query().Get("region"),
 	}
-	if !time_from.IsZero() && !time_to.IsZero() {
+	if !time_from.IsZero() {
 		filter.StartDate = &time_from
+	} 
+	if !time_to.IsZero() {
 		filter.EndDate = &time_to
 	} 
 
-	if daysInStatus := r.URL.Query().Get("days_in_status"); daysInStatus != "" {
+	if daysInStatus := r.URL.Query().Get("days_in_status"); daysInStatus != "" && daysInStatus != "0" {
 		if days, err := strconv.Atoi(daysInStatus); err == nil {
 			filter.StatusDuration = days
 		}
@@ -331,6 +334,7 @@ func (h *Handler) GetRegions(w http.ResponseWriter, r *http.Request) {
 		Search:  r.URL.Query().Get("search"),
 		Sort:    r.URL.Query().Get("sort"),
 		Project: r.URL.Query().Get("project"),
+		Status:  r.URL.Query().Get("status"),
 	}
 
 	if startDate := r.URL.Query().Get("start_date"); startDate != "" {
@@ -357,11 +361,50 @@ func (h *Handler) GetRegions(w http.ResponseWriter, r *http.Request) {
 
 	response, err := h.audienceService.GetRegions(ctx, filter)
 	if err != nil {
-		h.errorResponse(w, "failed to get regions data", err, http.StatusInternalServerError)
+		h.errorResponse(w, "failed to get regions data"+err.Error(), err, http.StatusInternalServerError)
 		return
 	}
 
 	h.jsonResponse(w, response, http.StatusOK)
+}
+
+func (h *Handler) ExportRegions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	filter := &domain.RegionFilter{
+		Search:  r.URL.Query().Get("search"),
+		Sort:    r.URL.Query().Get("sort"),
+		Project: r.URL.Query().Get("project"),
+		Status:  r.URL.Query().Get("status"),
+	}
+
+	if startDate := r.URL.Query().Get("start_date"); startDate != "" {
+		date, err := time.Parse(time.RFC3339, startDate)
+		if err != nil {
+			h.errorResponse(w, "invalid start date format", err, http.StatusBadRequest)
+			return
+		}
+		filter.StartDate = &date
+	}
+
+	if endDate := r.URL.Query().Get("end_date"); endDate != "" {
+		date, err := time.Parse(time.RFC3339, endDate)
+		if err != nil {
+			h.errorResponse(w, "invalid end date format", err, http.StatusBadRequest)
+			return
+		}
+		filter.EndDate = &date
+	}
+
+	filePath, fileName, err := h.audienceService.ExportRegions(ctx, filter)
+	if err != nil {
+		h.errorResponse(w, "failed to export regions data"+err.Error(), err, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
+	http.ServeFile(w, r, filePath)
 }
 
 func (h *Handler) GetCallCenterReport(w http.ResponseWriter, r *http.Request) {
@@ -468,6 +511,8 @@ func (h *Handler) GetStatusDurationReport(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
+	
+	h.logger.Info("GetStatusDurationReport", zap.Time("time_from", time_from), zap.Time("time_to", time_to), zap.Int("trashold", trashold))
 
 	filter := &domain.StatusDurationFilter{
 		StartDate: &time_from,
@@ -483,6 +528,52 @@ func (h *Handler) GetStatusDurationReport(w http.ResponseWriter, r *http.Request
 
 	h.jsonResponse(w, response, http.StatusOK)
 }
+
+// func (h *Handler) ExportStatusDurationReport(w http.ResponseWriter, r *http.Request){
+// 	ctx := r.Context()
+
+// 	time_from := time.Time{}
+// 	time_to := time.Time{}
+// 	err:= error(nil)
+// 	if r.URL.Query().Get("start_date") != "" {
+// 		time_from, err = time.Parse(time.RFC3339, r.URL.Query().Get("start_date"))
+// 		if err != nil  {
+// 			h.errorResponse(w, "invalid date_from format", err, http.StatusBadRequest)
+// 			return
+// 		}
+// 	}
+// 	if r.URL.Query().Get("end_date") != "" {
+// 		time_to, err = time.Parse(time.RFC3339, r.URL.Query().Get("end_date"))
+// 		if err != nil {
+// 			h.errorResponse(w, "invalid date_to format", err, http.StatusBadRequest)
+// 			return
+// 		}
+// 	}
+// 	trashold := 0
+// 	if r.URL.Query().Get("over_threshold") != "" {
+// 		trashold, err = strconv.Atoi(r.URL.Query().Get("over_threshold"))
+// 		if err != nil {
+// 			h.errorResponse(w, "invalid over_threshold format", err, http.StatusBadRequest)
+// 			return
+// 		}
+// 	}
+
+// 	filter := &domain.StatusDurationFilter{
+// 		StartDate: &time_from,
+// 		EndDate:   &time_to,
+// 		ThresholdDays: trashold,
+// 	}
+
+// 	filePath, fileName, err := h.audienceService.ExportStatusDurationReport(ctx, filter)
+// 	if err != nil {
+// 		h.errorResponse(w, "failed to export status duration report: "+err.Error(), err, http.StatusInternalServerError)
+// 		return
+// 	}
+
+// 	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+// 	w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
+// 	http.ServeFile(w, r, filePath)
+// }
 
 func (h *Handler) errorResponse(w http.ResponseWriter, message string, err error, code int) {
 	h.logger.Error(message,

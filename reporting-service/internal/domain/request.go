@@ -14,7 +14,7 @@ type ApplicationFilterRequest struct {
 	ProjectName    string 	  `json:"project_name" form:"project_name"`
 	PropertyType   string 	  `json:"property_type" form:"property_type"`
 	AudienceName   string 	  `json:"audience_name" form:"audience_name"`
-	AudienceIDs    []int64    `json:"audience_ids" form:"audience_ids"`
+	AudienceIDs    []string   `json:"audience_ids" form:"audience_ids"`
 	RegionName 	   string 	  `json:"region" form:"region"`
 	StartDate      *time.Time `json:"created_at_from" form:"created_at_from"`
 	EndDate        *time.Time `json:"created_at_to" form:"created_at_to"`
@@ -49,7 +49,8 @@ type RegionFilter struct {
 	Search    string     `json:"search"`
 	StartDate *time.Time `json:"start_date" `
 	EndDate   *time.Time `json:"end_date"`
-	Sort      string     `json:"sort"` //
+	Sort      string     `json:"sort"`
+	Status    string     `json:"status"`
 }
 
 type AudienceCreateRequest struct {

@@ -101,8 +101,8 @@ func main() {
 	defer amqpChan.Close()
 
 	// Initialize repositories
-	mysqlAudienceRepo := mysqlRepo.NewMySQLAudienceRepository(mysqlDB)
-	postgresAudienceRepo := postgreRepo.NewPostgresAudienceRepository(postgresDB)
+	mysqlAudienceRepo := mysqlRepo.NewMySQLAudienceRepository(mysqlDB, logger)
+	postgresAudienceRepo := postgreRepo.NewPostgresAudienceRepository(postgresDB, logger)
 
 	// Initialize services
 	audienceService := audience.NewService(audience.Config{

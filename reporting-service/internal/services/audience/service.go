@@ -88,15 +88,15 @@ func (s *Service) setupRabbitMQ() error {
 
 func (s *Service) GetFilters(ctx context.Context) (domain.ApplicationFilterResponce, error) {
 	filter := domain.ApplicationFilterResponce{}
-	
+
 	filter, err := s.mysqlRepo.GetFilters(ctx)
 
 	if err != nil {
 		return domain.ApplicationFilterResponce{}, fmt.Errorf("get filters: %w", err)
-	} 
+	}
 
 	filter.AudienceNames, err = s.audienceRepo.ListAudiencenames(ctx)
-	if  err != nil {
+	if err != nil {
 		return domain.ApplicationFilterResponce{}, fmt.Errorf("get filters: %w", err)
 	}
 	return filter, nil
@@ -220,17 +220,40 @@ func (s *Service) UpdateAudience(ctx context.Context, id int64, application_ids 
 }
 
 func (s *Service) ListApplications(ctx context.Context, pagination *domain.PaginationRequest, filter *domain.ApplicationFilterRequest) (*domain.PaginationResponse, error) {
-	audienceApplicationIDs, err := s.audienceRepo.GetApplicationIdsByAudienceName(ctx, filter.AudienceName)
+	// audienceApplicationIDs, err := s.audienceRepo.GetApplicationIdsByAudienceName(ctx, filter.AudienceName)
 
-	if audienceApplicationIDs !=nil && err != nil {
-		filter.AudienceIDs = audienceApplicationIDs
+	// if audienceApplicationIDs !=nil && err == nil {
+	// 	filter.AudienceIDs = audienceApplicationIDs
+	// }
+	//s.logger.Info("audienceApplicationIDs", zap.Any("audienceApplicationIDs", audienceApplicationIDs))
+
+	if filter.AudienceName != "" {
+		audienceId, err := s.audienceRepo.GetByName(ctx, filter.AudienceName)
+		if err != nil {
+			return nil, fmt.Errorf("get audience id: %w", err)
+		}
+		audience_filter, err := s.audienceRepo.GetFilterByAudienceId(ctx, audienceId.ID)
+
+		if err != nil {
+			return nil, fmt.Errorf("get filter by audience id: %w", err)
+		}
+
+		filter.AudienceIDs = append(filter.AudienceIDs, string(audienceId.ID))
+		response, err := s.mysqlRepo.ListApplicationsWithFilters(ctx, pagination, filter, audience_filter)
+		s.logger.Info("list applications", zap.Any("response", filter))
+		if err != nil {
+			return nil, fmt.Errorf("get applications: %w", err)
+		}
+		return response, nil
+
+	} else {
+		response, err := s.mysqlRepo.ListApplicationsWithFilters(ctx, pagination, filter, &domain.AudienceCreationFilter{})
+		s.logger.Info("list applications", zap.Any("response", filter))
+		if err != nil {
+			return nil, fmt.Errorf("get applications: %w", err)
+		}
+		return response, nil
 	}
-	
-	response, err := s.mysqlRepo.ListApplicationsWithFilters(ctx, pagination, filter)
-	if err != nil {
-		return nil, fmt.Errorf("get applications: %w", err)
-	}
-	return response, nil
 }
 
 func (s *Service) ProcessAllAudiences(ctx context.Context) error {
@@ -252,8 +275,8 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 		s.logger.Info("filter", zap.Any("filter", filter))
 
 		audience.Filter = domain.AudienceCreationFilter{
-			StartDate:     filter.StartDate,
-			EndDate:       filter.EndDate,
+			StartDate:            filter.StartDate,
+			EndDate:              filter.EndDate,
 			StatusNames:          filter.StatusNames,
 			RegectionReasonNames: filter.RegectionReasonNames,
 			NonTargetReasonNames: filter.NonTargetReasonNames,
@@ -364,7 +387,7 @@ func (s *Service) pushAudienceToRabbit(ctx context.Context, audience *domain.Aud
 	for i, chunk := range chunks {
 
 		message := domain.AudienceMessage{
-			CurrentChunk:    i+1,
+			CurrentChunk:    i + 1,
 			TotalChunks:     len(chunks),
 			AudienceName:    audience.Name,
 			AudienceID:      audience.ID,
@@ -404,61 +427,76 @@ func (s *Service) pushAudienceToRabbit(ctx context.Context, audience *domain.Aud
 }
 
 func (s *Service) GetRegions(ctx context.Context, filter *domain.RegionFilter) (*domain.RegionsResponse, error) {
-    s.logger.Info("getting regions data")//,
-        //zap.String("search", filter.Search),
-        //zap.Time("start_date", *filter.StartDate),
-        //zap.Time("end_date", *filter.EndDate),
-        //zap.String("sort", filter.Sort))
+	s.logger.Info("getting regions data") //,
+	//zap.String("search", filter.Search),
+	//zap.Time("start_date", *filter.StartDate),
+	//zap.Time("end_date", *filter.EndDate),
+	//zap.String("sort", filter.Sort))
 
-    response, err := s.mysqlRepo.GetRegionsData(ctx, filter)
-    if err != nil {
-        return nil, fmt.Errorf("get regions data: %w", err)
-    }
+	response, err := s.mysqlRepo.GetRegionsData(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("get regions data: %w", err)
+	}
 
-    // Validate response
-    if len(response.Data) == 0 {
-        s.logger.Warn("no regions data found")
-        return response, nil
-    }
+	// Validate response
+	if len(response.Data) == 0 {
+		s.logger.Warn("no regions data found")
+		return response, nil
+	}
 
-    s.logger.Info("got regions data",
-        zap.Int("total_projects", len(response.Data)),
-        zap.Int("total_regions", len(response.Headers)-2),
+	s.logger.Info("got regions data",
+		zap.Int("total_projects", len(response.Data)),
+		zap.Int("total_regions", len(response.Headers)-2),
 		zap.Any("footer", response.Footer),
 	)
 
-    return response, nil
+	return response, nil
+}
+
+func (s *Service) ExportRegions(ctx context.Context, filter *domain.RegionFilter) (string, string, error) {
+	s.logger.Info("exporting regions data")
+
+	response, err := s.mysqlRepo.GetRegionsData(ctx, filter)
+	if err != nil {
+		return "", "", fmt.Errorf("get regions data: %w", err)
+	}
+
+	filePath, fileName, err := s.exporter.ExportRegionsData(response)
+	if err != nil {
+		return "", "", fmt.Errorf("export regions data: %w", err)
+	}
+
+	return filePath, fileName, nil
 }
 
 func (s *Service) GetCallCenterReport(ctx context.Context, filter *domain.CallCenterReportFilter) (*domain.CallCenterReport, error) {
-    s.logger.Info("getting call center report", 
-        )
+	s.logger.Info("getting call center report")
 
-    report, err := s.mysqlRepo.GetCallCenterReportData(ctx, filter)
-    if err != nil {
-        return nil, fmt.Errorf("get call center report: %w", err)
-    }
+	report, err := s.mysqlRepo.GetCallCenterReportData(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("get call center report: %w", err)
+	}
 
-    // Process anomalies
-    //report.Anomalies = s.detectAnomalies(report.Data)
+	// Process anomalies
+	//report.Anomalies = s.detectAnomalies(report.Data)
 
-    return report, nil
+	return report, nil
 }
 
 func (s *Service) ExportCallCenterReport(ctx context.Context, filter *domain.CallCenterReportFilter) (string, string, error) {
-    s.logger.Info("exporting call center report")
+	s.logger.Info("exporting call center report")
 
-    report, err := s.mysqlRepo.GetCallCenterReportData(ctx, filter)
-    if err != nil {
-        return "", "", fmt.Errorf("get call center report: %w", err)
-    }
+	report, err := s.mysqlRepo.GetCallCenterReportData(ctx, filter)
+	if err != nil {
+		return "", "", fmt.Errorf("get call center report: %w", err)
+	}
 
-    filePath, fileName, err := s.exporter.ExportCallCenterReport(report)
-    if err != nil {
-        return "", "", fmt.Errorf("export to excel: %w", err)
-    }
+	filePath, fileName, err := s.exporter.ExportCallCenterReport(report)
+	if err != nil {
+		return "", "", fmt.Errorf("export to excel: %w", err)
+	}
 
-    return filePath, fileName, nil
+	return filePath, fileName, nil
 }
 
 func (s *Service) GetSpeedReport(ctx context.Context, filter *domain.StatusDurationFilter) (*domain.StatusDurationResponse, error) {
@@ -472,36 +510,51 @@ func (s *Service) GetSpeedReport(ctx context.Context, filter *domain.StatusDurat
 	return report, nil
 }
 
+// func (s *Service) ExportStatusDurationReport(ctx context.Context, filter *domain.StatusDurationFilter) (string, string, error) {
+// 	s.logger.Info("exporting speed report")
+
+// 	report, err := s.mysqlRepo.GetStatusDurationReport(ctx, filter)
+// 	if err != nil {
+// 		return "", "", fmt.Errorf("get speed report: %w", err)
+// 	}
+
+// 	filePath, fileName, err := s.exporter.ExportStatusDurationReport(report)
+// 	if err != nil {
+// 		return "", "", fmt.Errorf("export to excel: %w", err)
+// 	}
+
+// 	return filePath, fileName, nil
+// }
 
 func (s *Service) detectAnomalies(data []domain.ManagerMetrics) []string {
-    var anomalies []string
-    
-    // Calculate averages
-    var avgTargetConv, avgVisitConv, avgVisitSuccess float64
-    for _, m := range data {
-        avgTargetConv += m.TargetConversion
-        avgVisitConv += m.VisitConversion
-        avgVisitSuccess += m.VisitSuccess
-    }
-    count := float64(len(data))
-    avgTargetConv /= count
-    avgVisitConv /= count
-    avgVisitSuccess /= count
+	var anomalies []string
 
-    // Check for anomalies
-    for _, m := range data {
-        if m.TargetConversion < avgTargetConv*0.5 {
-            anomalies = append(anomalies, fmt.Sprintf("Низкая конверсия в целевые у %s: %.1f%%", m.ManagerName, m.TargetConversion))
-        }
-        if m.VisitConversion < avgVisitConv*0.5 {
-            anomalies = append(anomalies, fmt.Sprintf("Низкая конверсия в визиты у %s: %.1f%%", m.ManagerName, m.VisitConversion))
-        }
-        if m.VisitSuccess < avgVisitSuccess*0.5 {
-            anomalies = append(anomalies, fmt.Sprintf("Низкая успешность визитов у %s: %.1f%%", m.ManagerName, m.VisitSuccess))
-        }
-    }
+	// Calculate averages
+	var avgTargetConv, avgVisitConv, avgVisitSuccess float64
+	for _, m := range data {
+		avgTargetConv += m.TargetConversion
+		avgVisitConv += m.VisitConversion
+		avgVisitSuccess += m.VisitSuccess
+	}
+	count := float64(len(data))
+	avgTargetConv /= count
+	avgVisitConv /= count
+	avgVisitSuccess /= count
 
-    return anomalies
+	// Check for anomalies
+	for _, m := range data {
+		if m.TargetConversion < avgTargetConv*0.5 {
+			anomalies = append(anomalies, fmt.Sprintf("Низкая конверсия в целевые у %s: %.1f%%", m.ManagerName, m.TargetConversion))
+		}
+		if m.VisitConversion < avgVisitConv*0.5 {
+			anomalies = append(anomalies, fmt.Sprintf("Низкая конверсия в визиты у %s: %.1f%%", m.ManagerName, m.VisitConversion))
+		}
+		if m.VisitSuccess < avgVisitSuccess*0.5 {
+			anomalies = append(anomalies, fmt.Sprintf("Низкая успешность визитов у %s: %.1f%%", m.ManagerName, m.VisitSuccess))
+		}
+	}
+
+	return anomalies
 }
 
 func splitIntoChunks(ids []int64, chunkSize int) [][]int64 {

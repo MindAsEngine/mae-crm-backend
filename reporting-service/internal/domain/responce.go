@@ -26,6 +26,7 @@ type ApplicationFilterResponce struct {
 	ProjectNames  []string `json:"project_names" form:"project_names"`
 	PropertyTypes []string `json:"property_types" form:"property_types"`
 	AudienceNames []string `json:"audience_names" form:"audience_names"`
+	RegionNames   []string `json:"regions" form:"regions"`
 	//CreatedAtFrom  *time.Time `json:"created_at_from" form:"created_at_from"`
 	//CreatedAtTo    *time.Time `json:"created_at_to" form:"created_at_to"`
 	//DeadlinePassed bool       `json:"deadline_passed" form:"deadline_passed"`
