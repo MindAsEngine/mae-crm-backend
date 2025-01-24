@@ -59,6 +59,12 @@ type Header struct {
 	Format        string `json:"format"`
 }
 
+type Data_row struct {
+	Project          string `db:"project"`
+	Region           string `db:"region"`
+	ApplicationCount int    `db:"application_count"`
+}
+
 type RegionsResponse struct {
 	Headers []Header                 `json:"headers"`
 	Data    []map[string]interface{} `json:"data"`

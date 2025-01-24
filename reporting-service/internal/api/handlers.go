@@ -360,6 +360,7 @@ func (h *Handler) GetRegions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response, err := h.audienceService.GetRegions(ctx, filter)
+
 	if err != nil {
 		h.errorResponse(w, "failed to get regions data"+err.Error(), err, http.StatusInternalServerError)
 		return

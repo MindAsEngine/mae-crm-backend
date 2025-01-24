@@ -2,21 +2,15 @@ package mysql
 
 import (
 	"context"
-	"database/sql"
+	//"database/sql"
 	"fmt"
-	"math"
-	"time"
-
-	//"regexp"
-	"strconv"
-
-	//"time"
-
-	"reporting-service/internal/domain"
-	"strings"
-
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/zap"
+	"math"
+	"reporting-service/internal/domain"
+	//"strconv"
+	"strings"
+	"time"
 )
 
 type MySQLAudienceRepository struct {
@@ -193,9 +187,13 @@ func (r *MySQLAudienceRepository) GetNewApplicationsByAudience(ctx context.Conte
 	args["apllication_ids"] = apllication_ids
 
 	// Add date filters
-	if audience.Filter.StartDate != nil && audience.Filter.EndDate != nil {
+	if audience.Filter.StartDate != nil && !audience.Filter.StartDate.IsZero() {
 		query += " AND eb.date_added >= :creation_date_from"
 		args["creation_date_from"] = audience.Filter.StartDate
+
+	}
+
+	if audience.Filter.EndDate != nil && !audience.Filter.EndDate.IsZero() {
 		query += " AND eb.date_added <= :creation_date_to"
 		args["creation_date_to"] = audience.Filter.EndDate
 	}
@@ -358,7 +356,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
                 AND status_to = eb.status),
                 eb.date_added
             )) AS days_in_status,
-            COALESCE(h.complex_name, 'Не указан') AS project_name
+            COALESCE(h.complex_name, 'Не указано') AS project_name
         FROM estate_buys eb
         LEFT JOIN estate_deals_contacts edc ON edc.id = eb.contacts_id
         LEFT JOIN users u ON u.id = eb.manager_id
@@ -407,8 +405,8 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 	}
 
 	if filter.RegionName != "" {
-		whereConditions = append(whereConditions, 
-		"TRIM(REGEXP_SUBSTR(edc.passport_address COLLATE utf8_general_ci, 'г\\.\\s*([^,\\s]+)')) = :region_name")
+		whereConditions = append(whereConditions,
+			"TRIM(REGEXP_SUBSTR(edc.passport_address COLLATE utf8_general_ci, 'г\\.\\s*([^,\\s]+)')) = :region_name")
 		args["region_name"] = filter.RegionName
 	}
 
@@ -504,7 +502,6 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 
 	countQuery = r.db.Rebind(countQuery)
 
-
 	if err := r.db.GetContext(ctx, &totalItems, countQuery, params...); err != nil {
 		return nil, fmt.Errorf("count applications: %w", err)
 	}
@@ -524,7 +521,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 	if err != nil {
 		return nil, fmt.Errorf("prepare query: %w", err)
 	}
-	
+
 	query, queryArgs, err = sqlx.In(query, queryArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to expand IN clause: %w", err)
@@ -537,7 +534,6 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 		return nil, fmt.Errorf("select applications: %w", err)
 	}
 
-	
 	// appls := []domain.Application{}
 
 	// var raw_items []domain.Application
@@ -657,7 +653,6 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 			IsAdditional:  false,
 			Format:        "string",
 		},
-
 	}
 
 	//TODO Later: implement method for auto headers generation
@@ -703,7 +698,7 @@ func (r *MySQLAudienceRepository) ExportApplicationsWithFilters(ctx context.Cont
                 AND status_to = eb.status),
                 eb.date_added
             )) AS days_in_status,
-            COALESCE(h.complex_name, 'Не указан') AS project_name
+            COALESCE(h.complex_name, 'Не указано') AS project_name
         FROM estate_buys eb
         LEFT JOIN estate_deals_contacts edc ON edc.id = eb.contacts_id
         LEFT JOIN users u ON u.id = eb.manager_id
@@ -796,153 +791,374 @@ func (r *MySQLAudienceRepository) ExportApplicationsWithFilters(ctx context.Cont
 	return applications, nil
 }
 
+// func (r *MySQLAudienceRepository) GetRegionsData(ctx context.Context, filter *domain.RegionFilter) (*domain.RegionsResponse, error) {
+// 	//Step 0: Try date filters
+// 	tryDateQuerry := `SELECT * FROM macro_bi_cmp_528.estate_buys eb WHERE 1=1`
+// 	if filter.StartDate != nil && !filter.StartDate.IsZero() {
+// 		tryDateQuerry = tryDateQuerry + ` AND eb.date_added >= '` + filter.StartDate.Format("2006-01-02") + `'`
+// 	}
+// 	if filter.EndDate != nil && !filter.EndDate.IsZero() {
+// 		tryDateQuerry = tryDateQuerry + ` AND eb.date_added <= '` + filter.EndDate.Format("2006-01-02") + `'`
+// 	}
+// 	tryDateQuerry = tryDateQuerry + ` LIMIT 1`
+// 	if response, err := r.db.QueryContext(ctx, tryDateQuerry); err != nil || !response.Next() {
+// 		r.logger.Error("No appliccations for this dates: ", zap.Error(err))
+// 		return nil, fmt.Errorf("no applications for this dates: %w", err)
+// 	}
+
+// 	// Step 1: Set session variables
+// 	setSessionQuery := `
+//         SET SESSION group_concat_max_len = 10000;
+//     `
+// 	if _, err := r.db.ExecContext(ctx, setSessionQuery); err != nil {
+// 		return nil, fmt.Errorf("set session variables: %w", err)
+// 	}
+
+// 	// Step 2: Initialize variables
+// 	if _, err := r.db.ExecContext(ctx, `SET @cities = NULL`); err != nil {
+// 		return nil, fmt.Errorf("initialize @cities variable: %w", err)
+// 	}
+// 	if _, err := r.db.ExecContext(ctx, `SET @rn = 0`); err != nil {
+// 		return nil, fmt.Errorf("initialize @rn variable: %w", err)
+// 	}
+
+// 	// Step 3: Generate cities SQL
+// 	citiesQuery := `
+//         SELECT
+//     GROUP_CONCAT(DISTINCT CONCAT(
+//         "SUM(CASE WHEN city_name = '", city_name, "' THEN total_requests ELSE 0 END) AS '", city_name, "'"
+//     )) INTO @cities
+// FROM (
+//     SELECT DISTINCT
+//         REGEXP_SUBSTR(ec.passport_address, 'г\\.\\s*([^,\\s]+)') AS city_name
+//     FROM macro_bi_cmp_528.estate_deals_contacts ec
+//     LEFT JOIN macro_bi_cmp_528.estate_buys eb ON eb.contacts_id = ec.id
+//     WHERE (ec.passport_address IS NOT NULL) AND ec.passport_address != ''AND (eb.status_name = 'Сделка проведена' OR eb.status_name = 'Сделка в работе')
+// 	`
+// 	fmt.Println("filter.EndDate in IF", filter.StartDate)
+// 	fmt.Println("filter.EndDate in IF", filter.EndDate)
+
+// 	if filter.StartDate != nil && !filter.StartDate.IsZero() {
+// 		citiesQuery = citiesQuery + ` AND eb.date_added >= '` + filter.StartDate.Format("2006-01-02") + `'`
+// 		fmt.Println("filter.StartDate in IF", filter.StartDate)
+
+// 	}
+// 	if filter.EndDate != nil && !filter.EndDate.IsZero() {
+// 		citiesQuery = citiesQuery + ` AND eb.date_added <= '` + filter.EndDate.Format("2006-01-02") + `'`
+// 		fmt.Println("filter.EndDate in IF", filter.EndDate)
+// 	}
+
+// 	citiesQuery += `) city_list;`
+
+// 	if _, err := r.db.ExecContext(ctx, citiesQuery); err != nil {
+// 		return nil, fmt.Errorf("generate cities SQL: %w", err)
+// 	}
+
+// 	// var citiesSQL string
+// 	// getCitiesSQLQuery := `SELECT @cities`
+// 	// if err := r.db.QueryRowContext(ctx, getCitiesSQLQuery).Scan(&citiesSQL); err != nil {
+// 	//     return nil, fmt.Errorf("get cities SQL: %w", err)
+// 	// }
+// 	// if _, err := r.db.ExecContext(ctx, `SET @sql = NULL;`); err != nil {
+// 	//     return nil, fmt.Errorf("initialize @rn variable: %w", err)
+// 	// }
+// 	// Step 4: Build main query
+// 	mainQuery := `
+// SET @sql = CONCAT(
+//     "SELECT
+//         name_of_projects, ",
+//         @cities, "
+//      FROM (
+//          SELECT
+//              h.complex_name AS name_of_projects,
+//              REGEXP_SUBSTR(ec.passport_address, 'г\\.\\s*([^,\\s]+)') AS city_name,
+//              COUNT(eb.id) AS total_requests
+//          FROM macro_bi_cmp_528.estate_buys eb
+//          LEFT JOIN macro_bi_cmp_528.estate_sells es
+// 			 ON es.estate_buy_id = eb.id
+//          LEFT JOIN macro_bi_cmp_528.estate_houses h
+//              ON h.id = eb.house_id
+//          LEFT JOIN macro_bi_cmp_528.estate_deals_contacts ec
+//              ON ec.id = eb.contacts_id
+//          WHERE
+//              eb.house_id != 0
+//              AND ec.passport_address != ''
+//     `
+
+// 	if filter.Status == "" {
+// 		mainQuery = mainQuery + ` AND es.estate_sell_status_name = 'Сделка проведена' OR es.estate_sell_status_name = 'Сделка в работе' OR eb.status_name = 'Бронь'`
+// 	} else {
+// 		mainQuery = mainQuery + ` AND eb.status_name = '` + filter.Status + `'`
+// 	}
+
+// 	if filter.Project != "" {
+// 		mainQuery = mainQuery + ` AND h.complex_name = '` + filter.Project + `'`
+// 	}
+
+// 	if filter.StartDate != nil && !filter.StartDate.IsZero() {
+// 		mainQuery = mainQuery + ` AND eb.date_added >= '` + filter.StartDate.Format("2006-01-02") + `'`
+// 	}
+// 	if filter.EndDate != nil && !filter.EndDate.IsZero() {
+// 		mainQuery = mainQuery + ` AND eb.date_added <= '` + filter.EndDate.Format("2006-01-02") + `'`
+// 	}
+
+// 	mainQuery += `         GROUP BY h.complex_name, REGEXP_SUBSTR(ec.passport_address, 'г\\.\\s*([^,\\s]+)')
+//      ) AS data
+//      GROUP BY name_of_projects
+//      ORDER BY name_of_projects"
+// );`
+
+// 	if _, err := r.db.ExecContext(ctx, mainQuery); err != nil {
+// 		return nil, fmt.Errorf("build main query: %w", err)
+// 	}
+
+// 	// Step 5: Execute the prepared statement
+// 	if _, err := r.db.ExecContext(ctx, "PREPARE stmt FROM @sql;"); err != nil {
+// 		return nil, fmt.Errorf("prepare statement: %w", err)
+// 	}
+
+// 	// Step 6: Query the results
+// 	rows, err := r.db.QueryContext(ctx, "EXECUTE stmt")
+// 	if err != nil {
+// 		return nil, fmt.Errorf("execute query: %w", err)
+// 	}
+// 	defer rows.Close()
+
+// 	// if _, err := r.db.ExecContext(ctx, "DEALLOCATE PREPARE stmt;"); err != nil {
+// 	//     return nil, fmt.Errorf("deallocate statement: %w", err)
+// 	// }
+
+// 	// Get column names for mapping
+// 	columns, err := rows.Columns()
+// 	if err != nil {
+// 		return nil, fmt.Errorf("get columns: %w", err)
+// 	}
+
+// 	// Prepare headers
+// 	headers := []domain.Header{
+// 		//{Name: "id", IsID: true, Title: "№", IsVisible: false, IsAsideHeader: false, IsAdditional: false, Format: "number"},
+// 		{Name: "name_of_projects",
+// 			Title:         "Наименование проектов",
+// 			IsAsideHeader: true,
+// 			IsVisible:     true,
+// 			IsAdditional:  false,
+// 			Format:        "string"},
+// 	}
+
+// 	for i := 1; i < len(columns); i++ {
+// 		headers = append(headers, domain.Header{
+// 			Name:          columns[i],
+// 			Title:         columns[i],
+// 			IsAsideHeader: false,
+// 			IsVisible:     true,
+// 			IsAdditional:  true,
+// 			Format:        "number",
+// 		})
+// 	}
+
+// 	// Process rows
+// 	var data []map[string]interface{}
+// 	footer := map[string]int{
+// 		"id":               0,
+// 		"name_of_projects": -1,
+// 	}
+
+// 	for rows.Next() {
+// 		values := make([]interface{}, len(columns))
+// 		valuePointers := make([]interface{}, len(columns))
+// 		for i := range values {
+// 			valuePointers[i] = new(sql.RawBytes)
+// 		}
+
+// 		if err := rows.Scan(valuePointers...); err != nil {
+// 			return nil, fmt.Errorf("scan row: %w", err)
+// 		}
+
+// 		rowData := make(map[string]interface{})
+// 		for i, col := range columns {
+// 			rawValue := *(valuePointers[i].(*sql.RawBytes))
+// 			if len(rawValue) == 0 {
+// 				rowData[col] = 0
+// 				if i > 0 { // Sum for footer (skip id and name)
+// 					footer[col] += 0
+// 				}
+// 				continue
+// 			}
+
+// 			valueStr := string(rawValue)
+// 			// fmt.Printf("Processing column: %s, value: %s\n", col, valueStr) // Debugging statement
+
+// 			if num, err := strconv.Atoi(valueStr); err == nil {
+// 				rowData[col] = num
+// 				if i > 0 { // Sum for footer (skip id and name)
+// 					footer[col] += num
+// 				}
+// 			} else {
+// 				rowData[col] = valueStr
+// 			}
+// 		}
+// 		data = append(data, rowData)
+// 	}
+
+// 	footerData := make(map[string]interface{})
+// 	for k, v := range footer {
+// 		footerData[k] = v
+// 	}
+// 	footerData["name_of_projects"] = "Общее"
+// 	return &domain.RegionsResponse{
+// 		Headers: headers,
+// 		Data:    data,
+// 		Footer:  footerData,
+// 	}, nil
+// }
+
 func (r *MySQLAudienceRepository) GetRegionsData(ctx context.Context, filter *domain.RegionFilter) (*domain.RegionsResponse, error) {
-	//Step 0: Try date filters
-	tryDateQuerry := `SELECT * FROM macro_bi_cmp_528.estate_buys eb WHERE 1=1`
+	try_date_query := `SELECT * FROM macro_bi_cmp_528.estate_buys eb WHERE 1=1`
 	if filter.StartDate != nil && !filter.StartDate.IsZero() {
-		tryDateQuerry = tryDateQuerry + ` AND eb.date_added >= '` + filter.StartDate.Format("2006-01-02") + `'`
+		try_date_query = try_date_query + ` AND eb.date_added >= '` + filter.StartDate.Format("2006-01-02") + `'`
 	}
 	if filter.EndDate != nil && !filter.EndDate.IsZero() {
-		tryDateQuerry = tryDateQuerry + ` AND eb.date_added <= '` + filter.EndDate.Format("2006-01-02") + `'`
+		try_date_query = try_date_query + ` AND eb.date_added <= '` + filter.EndDate.Format("2006-01-02") + `'`
 	}
-	tryDateQuerry = tryDateQuerry + ` LIMIT 1`
-	if response, err := r.db.QueryContext(ctx, tryDateQuerry); err != nil || !response.Next() {
+	try_date_query = try_date_query + ` LIMIT 1`
+	if response, err := r.db.QueryContext(ctx, try_date_query); err != nil || !response.Next() {
 		r.logger.Error("No appliccations for this dates: ", zap.Error(err))
 		return nil, fmt.Errorf("no applications for this dates: %w", err)
 	}
 
-	// Step 1: Set session variables
-	setSessionQuery := `
-        SET SESSION group_concat_max_len = 10000;
-    `
-	if _, err := r.db.ExecContext(ctx, setSessionQuery); err != nil {
-		return nil, fmt.Errorf("set session variables: %w", err)
-	}
+	columns_query := `
+		SELECT DISTINCT 
+    	    	coalesce(TRIM(LOWER(REGEXP_REPLACE(REGEXP_SUBSTR(
+                    passport_address,
+                    '((г\\.|город )\\s*([^,\\s\\.]+))|(([^,\\s\\.]+)\\s(shah|shax|Ш(и|а)\\SРИ|ша\\Sар|город,|ш\\.))'
+                ),
+                '(г\\.|город\\s|\\sshah|\\sshax|\\sШ(и|а)\\SРИ|\\sша\\Sар|\\sгород,|\\sш\\.)', ''
+            ))), "Не указано")
+    	    AS city_name
+    	FROM macro_bi_cmp_528.estate_deals_contacts ec
+		LEFT JOIN macro_bi_cmp_528.estate_buys eb ON eb.contacts_id = ec.id
+		ORDER BY city_name`
 
-	// Step 2: Initialize variables
-	if _, err := r.db.ExecContext(ctx, `SET @cities = NULL`); err != nil {
-		return nil, fmt.Errorf("initialize @cities variable: %w", err)
-	}
-	if _, err := r.db.ExecContext(ctx, `SET @rn = 0`); err != nil {
-		return nil, fmt.Errorf("initialize @rn variable: %w", err)
-	}
+	rows_query := `SELECT distinct h.complex_name from macro_bi_cmp_528.estate_houses h`
 
-	// Step 3: Generate cities SQL
-	citiesQuery := `
-        SELECT 
-    GROUP_CONCAT(DISTINCT CONCAT(
-        "SUM(CASE WHEN city_name = '", city_name, "' THEN total_requests ELSE 0 END) AS '", city_name, "'"
-    )) INTO @cities
-FROM (
-    SELECT DISTINCT 
-        REGEXP_SUBSTR(ec.passport_address, 'г\\.\\s*([^,\\s]+)') AS city_name
-    FROM macro_bi_cmp_528.estate_deals_contacts ec
-    LEFT JOIN macro_bi_cmp_528.estate_buys eb ON eb.contacts_id = ec.id
-    WHERE (ec.passport_address IS NOT NULL) AND ec.passport_address != ''AND (eb.status_name = 'Сделка проведена' OR eb.status_name = 'Сделка в работе') 
-	`
-	fmt.Println("filter.EndDate in IF", filter.StartDate)
-	fmt.Println("filter.EndDate in IF", filter.EndDate)
+	data_query := `
+	SELECT 
+    	coalesce(h.complex_name, 'Не указано') AS project,
+    	coalesce(TRIM(LOWER(REGEXP_REPLACE(REGEXP_SUBSTR(
+                    passport_address,
+                    '((г\\.|город )\\s*([^,\\s\\.]+))|(([^,\\s\\.]+)\\s(shah|shax|Ш(и|а)\\SРИ|ша\\Sар|город,|ш\\.))'
+                ),
+                '(г\\.|город\\s|\\sshah|\\sshax|\\sШ(и|а)\\SРИ|\\sша\\Sар|\\sгород,|\\sш\\.)', ''
+            ))), "Не указано") AS region,
+    	COUNT(eb.id) AS application_count
+	FROM estate_buys eb
+	LEFT JOIN estate_houses h ON h.id = eb.house_id
+	LEFT JOIN estate_deals_contacts edc ON edc.id = eb.contacts_id
+	LEFT JOIN users u ON u.id = eb.manager_id
+	LEFT JOIN estate_sells es ON es.id = eb.estate_sell_id
+	LEFT JOIN estate_deals ed ON eb.deal_id = ed.id
+	WHERE eb.company_id = 528 
+		`
 
-	if filter.StartDate != nil && !filter.StartDate.IsZero() {
-		citiesQuery = citiesQuery + ` AND eb.date_added >= '` + filter.StartDate.Format("2006-01-02") + `'`
-		fmt.Println("filter.StartDate in IF", filter.StartDate)
+	data_group_query := `
+		GROUP BY 
+    		coalesce(TRIM(LOWER(REGEXP_REPLACE(REGEXP_SUBSTR(
+                    passport_address,
+                    '((г\\.|город )\\s*([^,\\s\\.]+))|(([^,\\s\\.]+)\\s(shah|shax|Ш(и|а)\\SРИ|ша\\Sар|город,|ш\\.))'
+                ),
+                '(г\\.|город\\s|\\sshah|\\sshax|\\sШ(и|а)\\SРИ|\\sша\\Sар|\\sгород,|\\sш\\.)', ''
+            ))), "Не указано"),
+    		coalesce(h.complex_name, "Не указано")
+		ORDER BY 
+     		coalesce(region,"Не указано"),
+     		coalesce(h.complex_name, "Не указано");`
 
-	}
-	if filter.EndDate != nil && !filter.EndDate.IsZero() {
-		citiesQuery = citiesQuery + ` AND eb.date_added <= '` + filter.EndDate.Format("2006-01-02") + `'`
-		fmt.Println("filter.EndDate in IF", filter.EndDate)
-	}
+	// totals_query := `
+	// 	SELECT
+	// 		COALESCE(lower(TRIM(
+	// 	        REGEXP_REPLACE(
+	// 	            REGEXP_SUBSTR(
+	// 	                passport_address,
+	// 	                '((г\\.|город )\\s*([^,\\s\\.]+))|(([^,\\s\\.]+)\\s(shah|shax|Ш(и|а)\\SРИ|ша\\Sар|город,|ш\\.))'
+	// 	            ),
+	// 	            '(г\\.|город\\s|\\sshah|\\sshax|\\sШ(и|а)\\SРИ|\\sша\\Sар|\\sгород,|\\sш\\.)', ''
+	// 	        )
+	// 	    )), "Не указан")  AS region,
+	// 		COUNT(eb.id) AS application_count
+	// 	FROM
+	// 		estate_buys eb
+	// 	LEFT JOIN
+	// 		estate_deals_contacts edc ON edc.id = eb.contacts_id
+	// 	Where eb.company_id = 528 `
 
-	citiesQuery += `) city_list;`
+	// totals_group_query := `GROUP BY COALESCE(lower(TRIM(
+	//         REGEXP_REPLACE(
+	//             REGEXP_SUBSTR(
+	//                 passport_address,
+	//                 '((г\\.|город )\\s*([^,\\s\\.]+))|(([^,\\s\\.]+)\\s(shah|shax|Ш(и|а)\\SРИ|ша\\Sар|город,|ш\\.))'
+	//             ),
+	//             '(г\\.|город\\s|\\sshah|\\sshax|\\sШ(и|а)\\SРИ|\\sша\\Sар|\\sгород,|\\sш\\.)', ''
+	//         )
+	//     )), 'Не указан')`
 
-	if _, err := r.db.ExecContext(ctx, citiesQuery); err != nil {
-		return nil, fmt.Errorf("generate cities SQL: %w", err)
-	}
-
-	// var citiesSQL string
-	// getCitiesSQLQuery := `SELECT @cities`
-	// if err := r.db.QueryRowContext(ctx, getCitiesSQLQuery).Scan(&citiesSQL); err != nil {
-	//     return nil, fmt.Errorf("get cities SQL: %w", err)
-	// }
-	// if _, err := r.db.ExecContext(ctx, `SET @sql = NULL;`); err != nil {
-	//     return nil, fmt.Errorf("initialize @rn variable: %w", err)
-	// }
-	// Step 4: Build main query
-	mainQuery := `
-SET @sql = CONCAT(
-    "SELECT 
-        name_of_projects, ",
-        @cities, "
-     FROM (
-         SELECT 
-             h.complex_name AS name_of_projects, 
-             REGEXP_SUBSTR(ec.passport_address, 'г\\.\\s*([^,\\s]+)') AS city_name,
-             COUNT(eb.id) AS total_requests
-         FROM macro_bi_cmp_528.estate_buys eb
-         LEFT JOIN macro_bi_cmp_528.estate_sells es
-			 ON es.estate_buy_id = eb.id
-         LEFT JOIN macro_bi_cmp_528.estate_houses h 
-             ON h.id = eb.house_id
-         LEFT JOIN macro_bi_cmp_528.estate_deals_contacts ec 
-             ON ec.id = eb.contacts_id
-         WHERE 
-             eb.house_id != 0 
-             AND ec.passport_address != ''
-    `
-
+	//COALESCE(h.complex_name, 'Не указан')
 	if filter.Status == "" {
-		mainQuery = mainQuery + ` AND es.estate_sell_status_name = 'Сделка проведена' OR es.estate_sell_status_name = 'Сделка в работе' OR eb.status_name = 'Бронь'`
+		data_query = data_query + ` AND (es.estate_sell_status_name = 'Сделка проведена' OR es.estate_sell_status_name = 'Сделка в работе' OR es.estate_sell_status_name = 'Бронь')
+`
+		//totals_query = totals_query + ` AND es.estate_sell_status_name = 'Сделка проведена' OR es.estate_sell_status_name = 'Сделка в работе' OR eb.status_name = 'Бронь'`
+		//columns_query = columns_query + ` AND es.estate_sell_status_name = 'Сделка проведена' OR es.estate_sell_status_name = 'Сделка в работе' OR eb.status_name = 'Бронь'`
 	} else {
-		mainQuery = mainQuery + ` AND eb.status_name = '` + filter.Status + `'`
+		data_query = data_query + ` AND eb.status_name = '` + filter.Status + `'`
+		//totals_query = totals_query + ` AND eb.status_name = '` + filter.Status + `'`
+		//columns_query = columns_query + ` AND eb.status_name = '` + filter.Status + `'`
 	}
 
 	if filter.Project != "" {
-		mainQuery = mainQuery + ` AND h.complex_name = '` + filter.Project + `'`
+		data_query = data_query + ` AND h.complex_name = '` + filter.Project + `'`
+		//totals_query = totals_query + ` AND h.complex_name = '` + filter.Project + `'`
+		//columns_query = columns_query + ` AND h.complex_name = '` + filter.Project + `'`
 	}
 
 	if filter.StartDate != nil && !filter.StartDate.IsZero() {
-		mainQuery = mainQuery + ` AND eb.date_added >= '` + filter.StartDate.Format("2006-01-02") + `'`
+		data_query = data_query + ` AND eb.date_added >= '` + filter.StartDate.Format("2006-01-02") + `'`
+		//totals_query = totals_query + ` AND eb.date_added >= '` + filter.StartDate.Format("2006-01-02") + `'`
+		//columns_query = columns_query + ` AND eb.date_added >= '` + filter.StartDate.Format("2006-01-02") + `'`
+
 	}
+
 	if filter.EndDate != nil && !filter.EndDate.IsZero() {
-		mainQuery = mainQuery + ` AND eb.date_added <= '` + filter.EndDate.Format("2006-01-02") + `'`
+		data_query = data_query + ` AND eb.date_added <= '` + filter.EndDate.Format("2006-01-02") + `'`
+		//totals_query = totals_query + ` AND eb.date_added <= '` + filter.EndDate.Format("2006-01-02") + `'`
+		// columns_query = columns_query + ` AND eb.date_added <= '` + filter.EndDate.Format("2006-01-02") + `'`
+
 	}
 
-	mainQuery += `         GROUP BY h.complex_name, REGEXP_SUBSTR(ec.passport_address, 'г\\.\\s*([^,\\s]+)')
-     ) AS data
-     GROUP BY name_of_projects
-     ORDER BY name_of_projects"
-);`
+	// r.logger.Info("date_added in IF", zap.Any("start",filter.StartDate.Format("2006-01-02")))
+	// r.logger.Info("date_added in IF", zap.Any("end",filter.EndDate.Format("2006-01-02")))
 
-	if _, err := r.db.ExecContext(ctx, mainQuery); err != nil {
-		return nil, fmt.Errorf("build main query: %w", err)
+	data_query = data_query + data_group_query
+	//totals_query = totals_query + totals_group_query
+
+	var cities []string
+	if err := r.db.SelectContext(ctx, &cities, columns_query); err != nil {
+		return nil, fmt.Errorf("select columns: %w", err)
 	}
 
-	// Step 5: Execute the prepared statement
-	if _, err := r.db.ExecContext(ctx, "PREPARE stmt FROM @sql;"); err != nil {
-		return nil, fmt.Errorf("prepare statement: %w", err)
+	var projects []string
+	if err := r.db.SelectContext(ctx, &projects, rows_query); err != nil {
+		return nil, fmt.Errorf("select rows: %w", err)
 	}
 
-	// Step 6: Query the results
-	rows, err := r.db.QueryContext(ctx, "EXECUTE stmt")
-	if err != nil {
-		return nil, fmt.Errorf("execute query: %w", err)
-	}
-	defer rows.Close()
+	//var totals []domain.Total_row
+	//if err := r.db.SelectContext(ctx, &totals, totals_query); err != nil {
+	//	return nil, fmt.Errorf("select totaals: %w", err)
+	//}
 
-	// if _, err := r.db.ExecContext(ctx, "DEALLOCATE PREPARE stmt;"); err != nil {
-	//     return nil, fmt.Errorf("deallocate statement: %w", err)
-	// }
-
-	// Get column names for mapping
-	columns, err := rows.Columns()
-	if err != nil {
-		return nil, fmt.Errorf("get columns: %w", err)
-	}
-
+	//TODO: REWRITE HEADER CREATION BASED ON DATA RECIEVED
 	// Prepare headers
 	headers := []domain.Header{
 		//{Name: "id", IsID: true, Title: "№", IsVisible: false, IsAsideHeader: false, IsAdditional: false, Format: "number"},
-		{   Name: "name_of_projects",
+		{Name: "name_of_projects",
 			Title:         "Наименование проектов",
 			IsAsideHeader: true,
 			IsVisible:     true,
@@ -950,71 +1166,66 @@ SET @sql = CONCAT(
 			Format:        "string"},
 	}
 
-	for i := 1; i < len(columns); i++ {
-		headers = append(headers, domain.Header{
-			Name:          columns[i],
-			Title:         columns[i],
-			IsAsideHeader: false,
-			IsVisible:     true,
-			IsAdditional:  true,
-			Format:        "number",
-		})
-	}
-
-	// Process rows
-	var data []map[string]interface{}
 	footer := map[string]int{
 		"id":               0,
 		"name_of_projects": -1,
 	}
 
-	for rows.Next() {
-		values := make([]interface{}, len(columns))
-		valuePointers := make([]interface{}, len(columns))
-		for i := range values {
-			valuePointers[i] = new(sql.RawBytes)
-		}
+	var data []domain.Data_row
+	if err := r.db.SelectContext(ctx, &data, data_query); err != nil {
+		return nil, fmt.Errorf("select data: %w", err)
+	}
 
-		if err := rows.Scan(valuePointers...); err != nil {
-			return nil, fmt.Errorf("scan row: %w", err)
-		}
+	var data_map = make(map[string]interface{})
+	// Convert rawDataRow to DataRow with a composite key.
+	for _, data_row := range data {
+		data_map[data_row.Project+" "+data_row.Region] = data_row.ApplicationCount
+	}
 
-		rowData := make(map[string]interface{})
-		for i, col := range columns {
-			rawValue := *(valuePointers[i].(*sql.RawBytes))
-			if len(rawValue) == 0 {
-				rowData[col] = 0
-				if i > 0 { // Sum for footer (skip id and name)
-					footer[col] += 0
-				}
-				continue
+	var data_responce []map[string]interface{}
+
+	for _, city := range cities {
+		for _, project := range projects {
+			if data_map[project+" "+city] != nil {
+				headers = append(headers, domain.Header{
+					Name:          city,
+					Title:         city,
+					IsAsideHeader: false,
+					IsVisible:     true,
+					IsAdditional:  true,
+					Format:        "number",
+				})
+				break
 			}
+		}
+	}
 
-			valueStr := string(rawValue)
-			// fmt.Printf("Processing column: %s, value: %s\n", col, valueStr) // Debugging statement
-
-			if num, err := strconv.Atoi(valueStr); err == nil {
-				rowData[col] = num
-				if i > 0 { // Sum for footer (skip id and name)
-					footer[col] += num
-				}
+	for _, project := range projects {
+		var data_bit = make(map[string]interface{})
+		data_bit["name_of_projects"] = project
+		for _, city := range cities {
+			if data_map[project+" "+city] != nil {
+				data_bit[city] = data_map[project+" "+city]
+				footer[city] += data_map[project+" "+city].(int)
 			} else {
-				rowData[col] = valueStr
+				data_bit[city] = 0
 			}
 		}
-		data = append(data, rowData)
+		data_responce = append(data_responce, data_bit)
 	}
 
 	footerData := make(map[string]interface{})
 	for k, v := range footer {
 		footerData[k] = v
 	}
+
 	footerData["name_of_projects"] = "Общее"
 	return &domain.RegionsResponse{
 		Headers: headers,
-		Data:    data,
+		Data:    data_responce,
 		Footer:  footerData,
 	}, nil
+
 }
 
 func (r *MySQLAudienceRepository) GetCallCenterReportData(ctx context.Context, filter *domain.CallCenterReportFilter) (*domain.CallCenterReport, error) {
@@ -1272,10 +1483,3 @@ func (r *MySQLAudienceRepository) GetStatusDurationReport(ctx context.Context, f
 		Footer:  footer,
 	}, nil
 }
-
-// func sanitizeColumnName(name string) string {
-// 	// Replace non-alphanumeric chars with underscore
-// 	reg := regexp.MustCompile(`[^a-zA-Z0-9_]`)
-// 	safe := reg.ReplaceAllString(name, "_")
-// 	return fmt.Sprintf("region_%s", safe)
-// }
