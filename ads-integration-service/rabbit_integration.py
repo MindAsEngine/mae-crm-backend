@@ -31,11 +31,10 @@ def callback(ch, method, properties, body):
                       "timestamp": datetime.datetime.now().isoformat()}
         else: # Если audience_id указан
             with message_lock:
-
                 print("Положили на полочку сообщение для аудитории ", audience_id)
                 logger.info(f"Получено сообщение для аудитории {audience_id}")
                 message_storage[audience_id].append(data)
-            if len(message_storage[audience_id]) >= total_chunks and current_chunk >= total_chunks:
+            if len(message_storage[audience_id]) >= total_chunks or current_chunk >= total_chunks:
                 print("Начало обработки сообщений для аудитории ", audience_id)
                 logger.info(f"Начало обработки сообщений для аудитории {audience_id}")
                 application_ids = []
