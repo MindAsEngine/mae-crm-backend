@@ -24,4 +24,4 @@ RUN pip install --upgrade pip setuptools wheel
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Указываем команду для запуска приложения
-CMD ["python", "rabbit_integration.py"]
+CMD ["python", "treads.py"]
