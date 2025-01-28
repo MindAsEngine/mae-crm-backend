@@ -5,7 +5,6 @@ import os
 from dotenv import load_dotenv
 from logger import logger
 
-
 def connect_to_database():
     load_dotenv()
     while True:
@@ -17,14 +16,10 @@ def connect_to_database():
                 database=os.getenv("MYSQL_DATABASE"),
                 port=os.getenv("MYSQL_PORT")
             )
-
         except mysql.connector.Error as err:
             print(f"Соединение с базой данных не установлено: {err}. Попробую снова через 5 секунд.")
             logger.error(f"Соединение с базой данных не установлено: {err}. Попробую снова через 5 секунд.")
             time.sleep(5)
-
-
-
 def get_applications_by_id(application_ids):
     try:
         conn = connect_to_database()
@@ -47,12 +42,11 @@ def get_applications_by_id(application_ids):
         
         cursor.execute(query_parameterized, tuple(application_ids))
         results = cursor.fetchall()
-        print("Данные из базы данных получены")
+
         logger.info("Данные из базы данных получены")
         conn.close()
         return results
     except mysql.connector.Error as err:
-        print(f"Ошибка при получении данных из базы данных: {err}")
         logger.error(f"Ошибка при получении данных из базы данных: {err}")
 
 
