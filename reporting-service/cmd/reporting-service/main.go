@@ -22,6 +22,8 @@ import (
 
 	"reporting-service/internal/services/audience"
 
+	middleware "reporting-service/internal/middleware"
+
 	mysqlRepo "reporting-service/internal/repository/mysql"
 	postgreRepo "reporting-service/internal/repository/postgre"
 )
@@ -116,19 +118,55 @@ func main() {
 
 	// Setup router with CORS
 	router := mux.NewRouter()
-	handler.RegisterRoutes(router)
+	
+	corsMiddleware := cors.New(cors.Options{
+        AllowedOrigins:   []string{"*"}, //[]string{"http://localhost:3000"},
+        AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+        AllowedHeaders:   []string{
+            "Content-Type",
+            "Authorization",
+            "Access-Control-Allow-Origin",
+            "Access-Control-Allow-Headers",
+            "Access-Control-Allow-Methods",
+        },
+        AllowCredentials: true,
+        MaxAge:          43200, //12hours
+        Debug:           true, // Enable for debugging
+    })
+    
+	router.Methods("OPTIONS").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Access-Control-Allow-Origin", "*") //http://frontend:3000
+    w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    w.Header().Set("Access-Control-Allow-Credentials", "true")
+    w.WriteHeader(http.StatusOK)
+})
 
-	corsHandler := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"}, // localhost:3000
-		AllowedMethods:   []string{"GET", "POST", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Content-Type", "Authorization"},
-		AllowCredentials: true,
-	}).Handler(router)
+    // Apply CORS middleware
+    router.Use(corsMiddleware.Handler)
+
+
+	authMiddleware := middleware.NewAuthMiddleware("http://auth-service:8081")
+    
+    // Protect all routes
+    // router.Use(authMiddleware.Validate)
+    
+	// Create a subrouter for protected routes
+	protected := router.PathPrefix("").Subrouter()
+	protected.Use(authMiddleware.Validate)
+	
+	// Register routes that need protection on the protected subrouter
+	handler.RegisterProtectedRoutes(protected)
+	
+	// Register public routes on the main router
+	handler.RegisterPublicRoutes(router)
+	
+    http.ListenAndServe(":8080", router)
 
 	// Create HTTP server
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler: corsHandler,
+		Handler: router,
 	}
 
 	// Start server in goroutine

@@ -2,39 +2,43 @@ version: '3'
 
 services:
 
-  # frontend:
-  #   restart: unless-stopped
-  #   build:
-  #     context: ./mae-crm-frontend
-  #     dockerfile: Dockerfile
-  #   container_name: frontend
-  #   ports:
-  #     - "3000:3000"
-  #   volumes:
-  #     - ./mae-crm-frontend/src:/app/src
-  #     - ./mae-crm-frontend/public:/app/public
-  #   networks:
-  #     - app-network
+  frontend:
+    restart: unless-stopped
+    build:
+      context: ./mae-crm-frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./mae-crm-frontend/src:/app/src
+      - ./mae-crm-frontend/public:/app/public
+    networks:
+      - app-network
 
   mongodb:
     image: mongo:6
     container_name: mongodb
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: secret
+    env_file: 
+      - ./.env
+    volumes:
+      - auth_data:/data/db
     ports:
       - "27017:27017"
+    networks:
+      - app-network
 
   auth-service:
     build: ./auth-service
     container_name: auth-service
     depends_on:
       - mongodb
-    environment:
-      PORT: 8081
-      MONGO_URI: "mongodb://root:secret@mongodb:27017"
+    env_file: 
+      - ./.env
     ports:
       - "8081:8081"
+    networks:
+      - app-network
 
   # Reporting Service
   reporting-service:     
@@ -47,8 +51,8 @@ services:
       - "8080:8080"
     volumes:
       - export_data:/app/export
-    environment:
-      - DATABASE_URL=postgresql://user:password@db:55432/reporting_db
+    env_file: 
+      - ./.env
     networks:
       - app-network
     healthcheck:
@@ -71,7 +75,7 @@ services:
       context: ./ads-integration-service
       dockerfile: Dockerfile
     env_file: 
-      - ./ads-integration-service/.env
+      - ./.env
     volumes:
       - ads_integration_volume:/app
     depends_on:
@@ -86,9 +90,8 @@ services:
   db:
     image: postgres:15
     container_name: postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
+    env_file: 
+      - ./.env
     ports:
       - "55432:5432"
     volumes:
@@ -110,11 +113,8 @@ services:
   mysql:
     image: mysql:8.0
     container_name: mysql
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: macro_bi_cmp_528
-      MYSQL_USER: user
-      MYSQL_PASSWORD: password
+    env_file: 
+      - ./.env
     ports:
       - "33306:3306"
     volumes:
@@ -141,9 +141,8 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
-    environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+    env_file: 
+      - ./.env  
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
@@ -184,6 +183,7 @@ services:
 
 
 volumes:
+  auth_data:
   postgres_data:
   mysql_data:
   rabbitmq_data:

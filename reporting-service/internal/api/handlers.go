@@ -2,6 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"io"
+
+	//"go/token"
 	//"fmt"
 	"net/http"
 	"strconv"
@@ -33,10 +36,19 @@ func NewHandler(audienceService *audience.Service, logger *zap.Logger) *Handler 
 	}
 }
 
-func (h *Handler) RegisterRoutes(r *mux.Router) {
+func (h *Handler) RegisterPublicRoutes(r *mux.Router) {
 	api := r.PathPrefix("/api").Subrouter()
 
-	api.HandleFunc("/health", h.HealthCheck).Methods(http.MethodGet)
+	api.HandleFunc("/auth/login", h.Login).Methods(http.MethodPost)
+	api.HandleFunc("/auth/health", h.HealthCheck).Methods(http.MethodGet)
+}
+
+func (h *Handler) RegisterProtectedRoutes(r *mux.Router) {
+	api := r.PathPrefix("/api").Subrouter()
+
+	// Auth endpoints
+	api.HandleFunc("/auth/register", h.Register).Methods(http.MethodPost)
+
 	// Audiences endpoints
 	api.HandleFunc("/audiences", h.GetAudiences).Methods(http.MethodGet)
 	api.HandleFunc("/audiences", h.CreateAudience).Methods(http.MethodPost)
@@ -46,18 +58,65 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 	api.HandleFunc("/audiences/{audienceId}/disconnect", h.DisconnectAudience).Methods(http.MethodDelete)
 	api.HandleFunc("/audiences/{audienceId}/export", h.ExportAudience).Methods(http.MethodGet)
 	
+	// Applications endpoints
 	api.HandleFunc("/applications/filters", h.GetAudienceFilters).Methods(http.MethodGet)
 	api.HandleFunc("/applications", h.ListApplications).Methods(http.MethodGet)
 	api.HandleFunc("/applications/export", h.ExportApplications).Methods(http.MethodGet)
 	
+	// Regions endpoints
 	api.HandleFunc("/regions", h.GetRegions).Methods(http.MethodGet)
 	api.HandleFunc("/regions/export", h.ExportRegions).Methods(http.MethodGet)
 	
+	// Call center endpoints
 	api.HandleFunc("/call-center", h.GetCallCenterReport).Methods(http.MethodGet)
 	api.HandleFunc("/call-center/export", h.ExportCallCenterReport).Methods(http.MethodGet)
 
+	// Speed endpoints
 	api.HandleFunc("/speed", h.GetStatusDurationReport).Methods(http.MethodGet)
 	//api.HandleFunc("/speed/export", h.ExportStatusDurationReport).Methods(http.MethodGet)
+}
+
+func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+	resp, err := http.Post("http://auth-service:8081/login", "application/json", r.Body)
+	if err != nil {
+		h.errorResponse(w, "failed to connect to auth service", err, http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		h.errorResponse(w, "authentication failed", nil, resp.StatusCode)
+		return
+	}
+
+	responseBody, err := io.ReadAll(resp.Body)
+    if err != nil {
+        h.errorResponse(w, "failed to read auth response", err, http.StatusInternalServerError)
+        return
+    }
+
+    h.jsonResponse(w, json.RawMessage(responseBody), http.StatusOK)
+}
+
+func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
+	resp, err := http.Post("http://auth-service:8081/register", "application/json", r.Body)
+	if err != nil {
+		h.errorResponse(w, "failed to connect to auth service", err, http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		h.errorResponse(w, "registration failed", nil, resp.StatusCode)
+		return
+	}
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		h.errorResponse(w, "failed to read auth response", err, http.StatusInternalServerError)
+		return
+	}
+	token := string(responseBody)
+	h.jsonResponse(w, token, http.StatusOK)
 }
 
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
