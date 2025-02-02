@@ -98,7 +98,7 @@ services:
      context: ./ads-integration-service
      dockerfile: Dockerfile
    env_file:
-     - ./ads-integration-service/.env
+     - ads-integration-service/.env
    volumes:
      - ads_integration_volume:/app
    networks:
