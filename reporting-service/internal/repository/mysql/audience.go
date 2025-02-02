@@ -77,7 +77,13 @@ func (r *MySQLAudienceRepository) GetFilters(ctx context.Context) (domain.Applic
 	}
 	query = `
 	SELECT DISTINCT 
-        TRIM(REGEXP_SUBSTR(ec.passport_address COLLATE utf8_general_ci, 'г\\.\\s*([^,\\s]+)')) AS city_name
+        coalesce(TRIM(LOWER(REGEXP_REPLACE(REGEXP_SUBSTR(
+                    passport_address,
+                    '((г\\.|город )\\s*([^,\\s\\.]+))|(([^,\\s\\.]+)\\s(shah|shax|Ш(и|а)\\SРИ|ша\\Sар|город,|ш\\.))'
+                ),
+                '(г\\.|город\\s|\\sshah|\\sshax|\\sШ(и|а)\\SРИ|\\sша\\Sар|\\sгород,|\\sш\\.)', ''
+            ))), "Не указано")
+    	    AS city_name
     	FROM macro_bi_cmp_528.estate_deals_contacts ec
     	WHERE ec.passport_address IS NOT NULL AND
 		TRIM(REGEXP_SUBSTR(ec.passport_address COLLATE utf8_general_ci, 'г\\.\\s*([^,\\s]+)')) != ''`
@@ -348,7 +354,13 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
             COALESCE(edc.contacts_buy_phones, 'Не указано') AS phone,
             COALESCE(u.users_name, 'Не назначен') AS manager_name,
             COALESCE(eb.category, "Не указано") AS property_type,
-			COALESCE(TRIM(REGEXP_SUBSTR(edc.passport_address COLLATE utf8_general_ci, 'г\\.\\s*([^,\\s]+)')), 'Не указано') AS region,
+			coalesce(TRIM(LOWER(REGEXP_REPLACE(REGEXP_SUBSTR(
+                    passport_address,
+                    '((г\\.|город )\\s*([^,\\s\\.]+))|(([^,\\s\\.]+)\\s(shah|shax|Ш(и|а)\\SРИ|ша\\Sар|город,|ш\\.))'
+                ),
+                '(г\\.|город\\s|\\sshah|\\sshax|\\sШ(и|а)\\SРИ|\\sша\\Sар|\\sгород,|\\sш\\.)', ''
+            ))), "Не указано")
+    	    AS region,
             DATEDIFF(NOW(), COALESCE(
                 (SELECT MAX(log_date) 
                 FROM estate_buys_statuses_log 
@@ -406,7 +418,12 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 
 	if filter.RegionName != "" {
 		whereConditions = append(whereConditions,
-			"TRIM(REGEXP_SUBSTR(edc.passport_address COLLATE utf8_general_ci, 'г\\.\\s*([^,\\s]+)')) = :region_name")
+			`coalesce(TRIM(LOWER(REGEXP_REPLACE(REGEXP_SUBSTR(
+                    edc.passport_address,
+                    '((г\\.|город )\\s*([^,\\s\\.]+))|(([^,\\s\\.]+)\\s(shah|shax|Ш(и|а)\\SРИ|ша\\Sар|город,|ш\\.))'
+                ),
+                '(г\\.|город\\s|\\sshah|\\sshax|\\sШ(и|а)\\SРИ|\\sша\\Sар|\\sгород,|\\sш\\.)', ''
+            ))), "Не указано") = :region_name`)
 		args["region_name"] = filter.RegionName
 	}
 
@@ -482,8 +499,12 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 			r.logger.Warn("invalid sort field requested, using default",
 				zap.String("field", filter.OrderField))
 		} else {
-			direction := "ASC"
+			direction := ""
 			if strings.ToUpper(filter.OrderDirection) == "DESC" {
+				direction = "DESC"
+			} else if strings.ToUpper(filter.OrderDirection) == "ASC" {
+				direction = "ASC"
+			} else {
 				direction = "DESC"
 			}
 			orderClause = fmt.Sprintf(" ORDER BY %s %s", dbField, direction)
@@ -572,6 +593,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 			IsVisible:     true,
 			IsAdditional:  false,
 			Format:        "number",
+			IsSortable:    true,
 		},
 		{
 			Name:          "name",
@@ -581,6 +603,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 			IsVisible:     true,
 			IsAdditional:  false,
 			Format:        "string",
+			IsSortable:    true,
 		},
 		{
 			Name:         "created_at",
@@ -589,6 +612,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 			IsVisible:    true,
 			IsAdditional: false,
 			Format:       "date",
+			IsSortable:   true,
 		},
 		{
 			Name:          "status_name",
@@ -598,6 +622,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 			IsVisible:     true,
 			IsAdditional:  false,
 			Format:        "enum",
+			IsSortable:    true,
 		},
 		{
 			Name:          "phone",
@@ -607,6 +632,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 			IsVisible:     true,
 			IsAdditional:  false,
 			Format:        "string",
+			IsSortable:    true,
 		},
 		{
 			Name:          "manager_name",
@@ -616,6 +642,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 			IsVisible:     true,
 			IsAdditional:  false,
 			Format:        "string",
+			IsSortable:    true,
 		},
 		{
 			Name:          "property_type",
@@ -625,6 +652,7 @@ func (r *MySQLAudienceRepository) ListApplicationsWithFilters(ctx context.Contex
 			IsVisible:     true,
 			IsAdditional:  false,
 			Format:        "enum",
+			IsSortable:    true,
 		},
 		{
 			Name:          "project_name",
