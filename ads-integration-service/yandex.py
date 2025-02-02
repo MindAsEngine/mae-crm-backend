@@ -1,8 +1,8 @@
 import datetime
 
 import requests
-from ..logger.logger import logger
-from ..csv_prepare import prepare_csv
+from logger import logger
+from csv_prepare import prepare_csv
 
 
 class YandexIntegration:

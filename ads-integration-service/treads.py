@@ -1,18 +1,19 @@
 import datetime
 import threading
 from collections import defaultdict
-from apscheduler.schedulers.background import BackgroundScheduler
+# from apscheduler.schedulers.background import BackgroundScheduler
 import os
 import time
 import pika
 import json
+from facebook import send_to_facebook_platform
 
-from apscheduler.triggers.date import DateTrigger
+# from apscheduler.triggers.date import DateTrigger
 from dotenv import load_dotenv
-from logger.logger import logger
-from mysql.database import get_applications_by_id
+from logger import logger
+from database import get_applications_by_id
 
-from yandex.yandex import YandexIntegration
+# from yandex import YandexIntegration
 
 
 
@@ -37,56 +38,59 @@ def connect_to_rabbit():
             time.sleep(5)
 
 def process_queue(ch, sch):
-    ya_integration = YandexIntegration(oauth_token=os.getenv("YANDEX_OAUTH_TOKEN"))
+    # ya_integration = YandexIntegration(oauth_token=os.getenv("YANDEX_OAUTH_TOKEN"))
     def process_message(data):
         try:
             audience_id = data.get('audience_id')
             audience_name = data.get('audience_name', f'Audience_{audience_id}')
-            application_ids_to_delete = data.get('application_ids_to_delete', [])
-            application_ids_to_add = data.get('application_ids_to_add', [])
-
+            application_ids_to_delete = data.get('delete_application_ids', [])
+            application_ids_to_add = data.get('new_application_ids', [])
             integrations = data.get('integrations', [])
             external_id = data.get('external_id', -1)
-
-            applications_to_delete = get_applications_by_id(application_ids_to_delete)
-            applications_to_add = get_applications_by_id(application_ids_to_add)
-
+            if application_ids_to_delete.__len__() > 0:
+                applications_to_delete = get_applications_by_id(application_ids_to_delete)
+            else:
+                applications_to_delete = []
+            if application_ids_to_add.__len__() > 0:
+                applications_to_add = get_applications_by_id(application_ids_to_add)
+            else:
+                applications_to_add = []
             results = {"audience_id": audience_id}
             integrations_statuses = []
 
             for integration in integrations:
                 cabinet = integration.get("cabinet_name")
                 if cabinet == "yandex":
-                    send_result = ya_integration.send_audience(
-                        audience_name=audience_name,
-                        applications_for_delete=applications_to_delete,
-                        application_for_add=applications_to_add,
-                        external_id=external_id
-                    )
-
-                    integrations_statuses.append({"cabinet": "yandex",
-                                                  "status": send_result,
-                                                  "timestamp": datetime.datetime.now().isoformat()})
-                    if send_result.result == "success":
-                        def execute_confirm_yandex_platform(res):
-                            ya_integration.confirm_yandex_platform(audience_name=res.name,
-                                                                   audience_id=res.external_id)
-
-                        task_name = f"confirm_yandex_{audience_id}"
-                        run_at = send_result.time_to_confirm
-                        scheduler.add_job(
-                            execute_confirm_yandex_platform,
-                            args=[send_result],
-                            trigger=DateTrigger(run_date=run_at),
-                            id=f"task_{task_name}_{run_at.timestamp()}"  # Уникальный ID задачи
-                        )
+                    pass
+                    # send_result = ya_integration.send_audience(
+                    #     audience_name=audience_name,
+                    #     applications_for_delete=applications_to_delete,
+                    #     application_for_add=applications_to_add,
+                    #     external_id=external_id
+                    # )
+                    #
+                    # integrations_statuses.append({"cabinet": "yandex",
+                    #                               "status": send_result,
+                    #                               "timestamp": datetime.datetime.now().isoformat()})
+                    # if send_result.result == "success":
+                    #     def execute_confirm_yandex_platform(res):
+                    #         ya_integration.confirm_yandex_platform(audience_name=res.name,
+                    #                                                audience_id=res.external_id)
+                    #
+                    #     task_name = f"confirm_yandex_{audience_id}"
+                    #     run_at = send_result.time_to_confirm
+                    #     scheduler.add_job(
+                    #         execute_confirm_yandex_platform,
+                    #         args=[send_result],
+                    #         trigger=DateTrigger(run_date=run_at),
+                    #         id=f"task_{task_name}_{run_at.timestamp()}"  # Уникальный ID задачи
+                    #     )
 
                 if cabinet == "facebook":
-                    pass
-                    # integrations_statuses.append({"cabinet": "facebook",
-                    #                               "status": send_to_facebook_platform(audience_name,
-                    #                                                                                    applications),
-                    #                               "timestamp": datetime.datetime.now().isoformat()})
+                    integrations_statuses.append({"cabinet": "facebook",
+                                                  "status": send_to_facebook_platform(audience_name, applications_to_add,
+                                                                                      applications_to_delete),
+                                                  "timestamp": datetime.datetime.now().isoformat()})
                 if cabinet == "google":
                     pass
                     # integrations_statuses.append({"cabinet": "google",
@@ -128,15 +132,19 @@ def process_queue(ch, sch):
                             application_ids_to_delete = []
                             application_ids_to_add = []
                             for message in message_storage[audience_id]:
-                                application_ids_to_delete.extend(message.get('application_ids_to_delete', []))
-                                application_ids_to_add.extend(message.get('application_ids_to_add', []))
+                                arr_del = message.get('delete_application_ids', [])
+                                if arr_del:
+                                    application_ids_to_delete.extend(arr_del)
+                                arr_add = message.get('new_application_ids', [])
+                                if arr_add:
+                                    application_ids_to_add.extend(arr_add)
                             processed_data = {
                                 "audience_id": audience_id,
                                 "external_id": message_storage[audience_id][0].get('external_id', -1),
                                 "audience_name": message_storage[audience_id][0].get('audience_name',
                                                                                      f'Audience_{audience_id}'),
-                                "application_ids_to_delete": application_ids_to_delete,
-                                "application_ids_to_add": application_ids_to_add,
+                                "delete_application_ids": application_ids_to_delete,
+                                "new_application_ids": application_ids_to_add,
 
                                 "integrations": message_storage[audience_id][0].get('integrations', [])
                             }
@@ -163,14 +171,14 @@ if __name__ == '__main__':
     RABBITMQ_EXCHANGE = os.getenv("RABBITMQ_EXCHANGE")
     RABBITMQ_STATUS_QUEUE = os.getenv("RABBITMQ_STATUS_QUEUE")
 
-    scheduler = BackgroundScheduler()
-    scheduler.start()
+    # scheduler = BackgroundScheduler()
+    # scheduler.start()
 
     message_storage = defaultdict(list)  # Ключ: audience_id, Значение: список сообщений
     message_lock = threading.Lock()
     channel = connect_to_rabbit()
 
-    process_queue(channel, scheduler)
+    process_queue(channel, None)
     try:
         channel.start_consuming()
     except Exception as ex:

@@ -34,7 +34,7 @@ def get_applications_by_id(application_ids):
         FROM macro_bi_cmp_528.estate_deals_contacts as deals 
         inner join macro_bi_cmp_528.estate_buys as buys 
         on buys.contacts_id = deals.id
-        WHERE buys.id IN (%s)
+        WHERE buys.id IN (%s) and deals.date_added > '2024-01-01'
         """
         # Format as: (%s,%s,%s) for the number of ids
         in_format = ','.join(['%s'] * len(application_ids))
