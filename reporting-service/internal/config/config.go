@@ -39,9 +39,10 @@ type PostgresConfig struct {
 }
 
 type RabbitMQConfig struct {
-	URL      string `yaml:"url"`
-	Exchange string `yaml:"exchange"`
-	Queue    string `yaml:"queue"`
+	URL        string `yaml:"url"`
+	Exchange   string `yaml:"exchange"`
+	Queue      string `yaml:"queue"`
+	RoutingKey string `yaml:"routing_key"`
 }
 
 type ServiceConfig struct {

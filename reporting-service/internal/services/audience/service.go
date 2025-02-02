@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
+
+	//"golang.org/x/text/message"
 
 	"reporting-service/internal/domain"
 	MysqlRepo "reporting-service/internal/repository/mysql"
@@ -53,34 +56,34 @@ func NewService(
 
 func (s *Service) setupRabbitMQ() error {
 	err := s.amqpChan.ExchangeDeclare(
-		"audiences", // name
-		"direct",    // type
-		true,        // durable
-		false,       // auto-deleted
-		false,       // internal
-		false,       // no-wait
-		nil,         // arguments
+		os.Getenv("RABBITMQ_EXCHANGE"), // name
+		"direct",                       // type
+		true,                           // durable
+		false,                          // auto-deleted
+		false,                          // internal
+		false,                          // no-wait
+		nil,                            // arguments
 	)
 	if err != nil {
 		return fmt.Errorf("declare exchange: %w", err)
 	}
 
 	_, err = s.amqpChan.QueueDeclare(
-		"audience.updates", // name
-		true,               // durable
-		false,              // delete when unused
-		false,              // exclusive
-		false,              // no-wait
-		nil,                // arguments
+		os.Getenv("RABBITMQ_QUEUE"), // name
+		true,                        // durable
+		false,                       // delete when unused
+		false,                       // exclusive
+		false,                       // no-wait
+		nil,                         // arguments
 	)
 	if err != nil {
 		return fmt.Errorf("declare queue: %w", err)
 	}
 
 	return s.amqpChan.QueueBind(
-		"audience.updates", // queue name
-		"audience.updates", // routing key
-		"audiences",        // exchange
+		os.Getenv("RABBITMQ_QUEUE"),       // queue name
+		os.Getenv("RABBITMQ_ROUTING_KEY"), // routing key
+		os.Getenv("RABBITMQ_EXCHANGE"),    // exchange
 		false,
 		nil,
 	)
@@ -272,7 +275,7 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 				zap.Error(err))
 			continue
 		}
-		s.logger.Info("filter", zap.Any("filter", filter))
+		//s.logger.Info("filter", zap.Any("filter", filter))
 
 		audience.Filter = domain.AudienceCreationFilter{
 			StartDate:            filter.StartDate,
@@ -290,7 +293,7 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 				zap.Error(err))
 			continue
 		}
-		s.logger.Info("current applications", zap.Any("current_applications", current_applications))
+		//s.logger.Info("current applications", zap.Any("current_applications", current_applications))
 
 		//Получаем заявки, которые изменили статус
 		changed_applications, err := s.mysqlRepo.GetChangedApplicationIds(ctx, &audience.Filter, current_applications)
@@ -300,8 +303,9 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 				zap.Error(err))
 			continue
 		}
-		s.logger.Info("changed applications", zap.Any("changed_applications", changed_applications))
+		//s.logger.Info("changed applications", zap.Any("changed_applications", changed_applications))
 
+		//Вот это в "удаляемые"
 		//Удаляем заявки с измененными статусами
 		if err := s.audienceRepo.DeleteApplications(ctx, audience.ID, changed_applications); err != nil {
 			s.logger.Error("delete applications with changed statuses failed",
@@ -309,7 +313,7 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 				zap.Error(err))
 			continue
 		}
-		s.logger.Info("applications deleted", zap.Any("applications", changed_applications))
+		//s.logger.Info("applications deleted", zap.Any("applications", changed_applications))
 
 		//Получаем заявки которые не изменили статус
 		current_applications, err = s.audienceRepo.GetApplicationIdsByAdienceId(ctx, audience.ID)
@@ -319,7 +323,7 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 				zap.Error(err))
 			continue
 		}
-		s.logger.Info("current applications", zap.Any("current_applications", current_applications))
+		//s.logger.Info("current applications", zap.Any("current_applications", current_applications))
 
 		//Получаем обновленные заявки которые ещё не в аудитории
 		requests, err := s.mysqlRepo.GetNewApplicationsByAudience(ctx, &audience, current_applications)
@@ -328,6 +332,7 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 			continue
 		}
 
+		//А эти в "новые"
 		if requests != nil {
 			if err := s.audienceRepo.UpdateApplicationsForAudience(ctx, audience.ID, requests); err != nil {
 				s.logger.Error("update requests: ", zap.Error(err))
@@ -339,17 +344,17 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 		//if requests == nil && changed_applications == nil {
 		//	s.logger.Info("no changed or new requests found so nothing pushed to rabbit", zap.Any("audience_id", audience.ID))
 		//} else {
-		req_ids, err := s.audienceRepo.GetApplicationIdsByAdienceId(ctx, audience.ID)
+		// req_ids, err := s.audienceRepo.GetApplicationIdsByAdienceId(ctx, audience.ID)
 
-		if err != nil {
-			s.logger.Error("get application ids by audience id: ", zap.Error(err))
-			continue
-		}
+		// if err != nil {
+		// 	s.logger.Error("get application ids by audience id: ", zap.Error(err))
+		// 	continue
+		// }
 
-		if len(req_ids) == 0 {
-			s.logger.Info("no requests found", zap.Any("audience_id", audience.ID))
-			continue
-		}
+		// if len(req_ids) == 0 {
+		// 	s.logger.Info("no requests found", zap.Any("audience_id", audience.ID))
+		// 	continue
+		// }
 
 		// requests, err = s.mysqlRepo.ListApplicationsByIds(ctx, req_ids)
 		// if err != nil {
@@ -357,7 +362,7 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 		// 	continue
 		// }
 
-		audience.Application_ids = req_ids
+		// audience.Application_ids = req_ids
 
 		if integration_names, err := s.audienceRepo.GetIntegrationNamesByAudienceId(ctx, audience.ID); err != nil {
 			s.logger.Error("get integration names by audience id: ", zap.Error(err))
@@ -366,7 +371,12 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 			audience.IntegrationNames = integration_names
 		}
 
-		if err := s.pushAudienceToRabbit(ctx, &audience); err != nil {
+		new_ids := make([]int64, 0, len(requests))
+		for _, application := range requests {
+			new_ids = append(new_ids, application.ID)
+		}
+
+		if err := s.pushAudienceToRabbit(ctx, &audience, new_ids, changed_applications); err != nil {
 			s.logger.Error("process audience failed",
 				zap.String("audience_id", string(audience.ID)),
 				zap.Error(err))
@@ -381,19 +391,36 @@ func (s *Service) ExportApplications(ctx context.Context, filter domain.Applicat
 	return s.exporter.ExportApplications(ctx, &filter)
 }
 
-func (s *Service) pushAudienceToRabbit(ctx context.Context, audience *domain.Audience) error {
-	chunks := splitIntoChunks(audience.Application_ids, 1000)
+func (s *Service) pushAudienceToRabbit(ctx context.Context, audience *domain.Audience, new_ids []int64, delete_ids []int64) error {
+	new_ids_chunks := splitIntoChunks(new_ids, 500)
+	delete_ids_chunks := splitIntoChunks(delete_ids, 500)
 
-	for i, chunk := range chunks {
+	messages := make([]domain.AudienceMessage, max(len(new_ids_chunks), len(delete_ids_chunks)))
 
-		message := domain.AudienceMessage{
-			CurrentChunk:    i + 1,
-			TotalChunks:     len(chunks),
-			AudienceName:    audience.Name,
-			AudienceID:      audience.ID,
-			Integrations:    audience.Integrations,
-			Application_ids: chunk,
+	if len(new_ids) > 0 {
+		for i, chunk := range new_ids_chunks {
+			messages[i] = domain.AudienceMessage{
+				New_application_ids: chunk,
+			}
 		}
+	}
+
+	if len(delete_ids) > 0 {
+		for i, chunk := range delete_ids_chunks {
+			messages[i] = domain.AudienceMessage{
+				Delete_application_ids: chunk,
+			}
+		}
+	}
+
+	for i, message := range messages {
+		message.AudienceName = audience.Name
+		message.AudienceID = audience.ID
+		message.Integrations = audience.Integrations
+		message.TotalChunks = len(messages)
+		message.CurrentChunk = i + 1
+
+		s.logger.Info("publishing audience update message", zap.Any("message", message))
 
 		body, err := json.Marshal(message)
 		if err != nil {
@@ -402,10 +429,10 @@ func (s *Service) pushAudienceToRabbit(ctx context.Context, audience *domain.Aud
 
 		err = s.amqpChan.PublishWithContext(
 			ctx,
-			"audiences",        // exchange
-			"audience.updates", // routing key
-			false,              // mandatory
-			false,              // immediate
+			os.Getenv("RABBITMQ_EXCHANGE"),    // exchange
+			os.Getenv("RABBITMQ_ROUTING_KEY"), // routing key
+			false,                             // mandatory
+			false,                             // immediate
 			amqp.Publishing{
 				ContentType:  "application/json",
 				Body:         body,
