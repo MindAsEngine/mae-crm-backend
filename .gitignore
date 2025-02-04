@@ -1,7 +1,17 @@
 consumer.rar
-
+.idea/**
+ads-integration-service/.env_dev
 ads-integration-service/.env
 ads-integration-service/docker-compose.yaml
 ads-integration-service/google-ads.yaml
 
 reporting-service/export/*
+reporting-service/plan.md
+ads-integration-service/yandex.csv
+ads-integration-service/__pycache__/ads_integrations.cpython-310.pyc
+ads-integration-service/__pycache__/database.cpython-310.pyc
+ads-integration-service/__pycache__/logger.cpython-310.pyc
+
+mae-crm-frontend/*
+plan.md
+.env

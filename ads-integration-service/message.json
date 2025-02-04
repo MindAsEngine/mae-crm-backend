@@ -1,0 +1,36 @@
+{
+  "audience_id": 2,
+  "audience_name": "test",
+  "current_chunk": 1,
+  "delete_application_ids": null,
+  "integrations": [
+    {
+      "id": 1,
+      "audience_id": 2,
+      "cabinet_name": "yandex",
+      "external_id": -1,
+      "created_at": "2025-01-08T12:17:19.840751Z",
+      "updated_at": "2025-01-08T12:17:19.840751Z"
+    },
+    {
+      "id": 3,
+      "audience_id": 2,
+      "cabinet_name": "facebook",
+      "external_id": -1,
+      "created_at": "2025-01-08T12:17:33.382597Z",
+      "updated_at": "2025-01-08T12:17:33.382597Z"
+    },
+    {
+      "id": 4,
+      "audience_id": 2,
+      "cabinet_name": "google",
+      "external_id": -1,
+      "created_at": "2025-01-08T12:17:41.415234Z",
+      "updated_at": "2025-01-08T12:17:41.415234Z"
+    }
+  ],
+  "new_application_ids": [
+    5262858
+  ],
+  "total_chunks": 1
+}

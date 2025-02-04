@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
+
+	//"golang.org/x/text/message"
 
 	"reporting-service/internal/domain"
 	MysqlRepo "reporting-service/internal/repository/mysql"
@@ -53,34 +56,34 @@ func NewService(
 
 func (s *Service) setupRabbitMQ() error {
 	err := s.amqpChan.ExchangeDeclare(
-		"audiences", // name
-		"direct",    // type
-		true,        // durable
-		false,       // auto-deleted
-		false,       // internal
-		false,       // no-wait
-		nil,         // arguments
+		os.Getenv("RABBITMQ_EXCHANGE"), // name
+		"direct",                       // type
+		true,                           // durable
+		false,                          // auto-deleted
+		false,                          // internal
+		false,                          // no-wait
+		nil,                            // arguments
 	)
 	if err != nil {
 		return fmt.Errorf("declare exchange: %w", err)
 	}
 
 	_, err = s.amqpChan.QueueDeclare(
-		"audience.updates", // name
-		true,               // durable
-		false,              // delete when unused
-		false,              // exclusive
-		false,              // no-wait
-		nil,                // arguments
+		os.Getenv("RABBITMQ_QUEUE"), // name
+		true,                        // durable
+		false,                       // delete when unused
+		false,                       // exclusive
+		false,                       // no-wait
+		nil,                         // arguments
 	)
 	if err != nil {
 		return fmt.Errorf("declare queue: %w", err)
 	}
 
 	return s.amqpChan.QueueBind(
-		"audience.updates", // queue name
-		"audience.updates", // routing key
-		"audiences",        // exchange
+		os.Getenv("RABBITMQ_QUEUE"),       // queue name
+		os.Getenv("RABBITMQ_ROUTING_KEY"), // routing key
+		os.Getenv("RABBITMQ_EXCHANGE"),    // exchange
 		false,
 		nil,
 	)
@@ -88,15 +91,15 @@ func (s *Service) setupRabbitMQ() error {
 
 func (s *Service) GetFilters(ctx context.Context) (domain.ApplicationFilterResponce, error) {
 	filter := domain.ApplicationFilterResponce{}
-	
+
 	filter, err := s.mysqlRepo.GetFilters(ctx)
 
 	if err != nil {
 		return domain.ApplicationFilterResponce{}, fmt.Errorf("get filters: %w", err)
-	} 
+	}
 
 	filter.AudienceNames, err = s.audienceRepo.ListAudiencenames(ctx)
-	if  err != nil {
+	if err != nil {
 		return domain.ApplicationFilterResponce{}, fmt.Errorf("get filters: %w", err)
 	}
 	return filter, nil
@@ -220,11 +223,40 @@ func (s *Service) UpdateAudience(ctx context.Context, id int64, application_ids 
 }
 
 func (s *Service) ListApplications(ctx context.Context, pagination *domain.PaginationRequest, filter *domain.ApplicationFilterRequest) (*domain.PaginationResponse, error) {
-	response, err := s.mysqlRepo.ListApplicationsWithFilters(ctx, pagination, filter)
-	if err != nil {
-		return nil, fmt.Errorf("get applications: %w", err)
+	// audienceApplicationIDs, err := s.audienceRepo.GetApplicationIdsByAudienceName(ctx, filter.AudienceName)
+
+	// if audienceApplicationIDs !=nil && err == nil {
+	// 	filter.AudienceIDs = audienceApplicationIDs
+	// }
+	//s.logger.Info("audienceApplicationIDs", zap.Any("audienceApplicationIDs", audienceApplicationIDs))
+
+	if filter.AudienceName != "" {
+		audienceId, err := s.audienceRepo.GetByName(ctx, filter.AudienceName)
+		if err != nil {
+			return nil, fmt.Errorf("get audience id: %w", err)
+		}
+		audience_filter, err := s.audienceRepo.GetFilterByAudienceId(ctx, audienceId.ID)
+
+		if err != nil {
+			return nil, fmt.Errorf("get filter by audience id: %w", err)
+		}
+
+		filter.AudienceIDs = append(filter.AudienceIDs, string(audienceId.ID))
+		response, err := s.mysqlRepo.ListApplicationsWithFilters(ctx, pagination, filter, audience_filter)
+		s.logger.Info("list applications", zap.Any("response", filter))
+		if err != nil {
+			return nil, fmt.Errorf("get applications: %w", err)
+		}
+		return response, nil
+
+	} else {
+		response, err := s.mysqlRepo.ListApplicationsWithFilters(ctx, pagination, filter, &domain.AudienceCreationFilter{})
+		s.logger.Info("list applications", zap.Any("response", filter))
+		if err != nil {
+			return nil, fmt.Errorf("get applications: %w", err)
+		}
+		return response, nil
 	}
-	return response, nil
 }
 
 func (s *Service) ProcessAllAudiences(ctx context.Context) error {
@@ -243,11 +275,11 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 				zap.Error(err))
 			continue
 		}
-		s.logger.Info("filter", zap.Any("filter", filter))
+		//s.logger.Info("filter", zap.Any("filter", filter))
 
 		audience.Filter = domain.AudienceCreationFilter{
-			StartDate:     filter.StartDate,
-			EndDate:       filter.EndDate,
+			StartDate:            filter.StartDate,
+			EndDate:              filter.EndDate,
 			StatusNames:          filter.StatusNames,
 			RegectionReasonNames: filter.RegectionReasonNames,
 			NonTargetReasonNames: filter.NonTargetReasonNames,
@@ -261,7 +293,7 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 				zap.Error(err))
 			continue
 		}
-		s.logger.Info("current applications", zap.Any("current_applications", current_applications))
+		//s.logger.Info("current applications", zap.Any("current_applications", current_applications))
 
 		//Получаем заявки, которые изменили статус
 		changed_applications, err := s.mysqlRepo.GetChangedApplicationIds(ctx, &audience.Filter, current_applications)
@@ -271,8 +303,9 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 				zap.Error(err))
 			continue
 		}
-		s.logger.Info("changed applications", zap.Any("changed_applications", changed_applications))
+		//s.logger.Info("changed applications", zap.Any("changed_applications", changed_applications))
 
+		//Вот это в "удаляемые"
 		//Удаляем заявки с измененными статусами
 		if err := s.audienceRepo.DeleteApplications(ctx, audience.ID, changed_applications); err != nil {
 			s.logger.Error("delete applications with changed statuses failed",
@@ -280,7 +313,7 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 				zap.Error(err))
 			continue
 		}
-		s.logger.Info("applications deleted", zap.Any("applications", changed_applications))
+		//s.logger.Info("applications deleted", zap.Any("applications", changed_applications))
 
 		//Получаем заявки которые не изменили статус
 		current_applications, err = s.audienceRepo.GetApplicationIdsByAdienceId(ctx, audience.ID)
@@ -290,7 +323,7 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 				zap.Error(err))
 			continue
 		}
-		s.logger.Info("current applications", zap.Any("current_applications", current_applications))
+		//s.logger.Info("current applications", zap.Any("current_applications", current_applications))
 
 		//Получаем обновленные заявки которые ещё не в аудитории
 		requests, err := s.mysqlRepo.GetNewApplicationsByAudience(ctx, &audience, current_applications)
@@ -299,6 +332,7 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 			continue
 		}
 
+		//А эти в "новые"
 		if requests != nil {
 			if err := s.audienceRepo.UpdateApplicationsForAudience(ctx, audience.ID, requests); err != nil {
 				s.logger.Error("update requests: ", zap.Error(err))
@@ -310,17 +344,17 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 		//if requests == nil && changed_applications == nil {
 		//	s.logger.Info("no changed or new requests found so nothing pushed to rabbit", zap.Any("audience_id", audience.ID))
 		//} else {
-		req_ids, err := s.audienceRepo.GetApplicationIdsByAdienceId(ctx, audience.ID)
+		// req_ids, err := s.audienceRepo.GetApplicationIdsByAdienceId(ctx, audience.ID)
 
-		if err != nil {
-			s.logger.Error("get application ids by audience id: ", zap.Error(err))
-			continue
-		}
+		// if err != nil {
+		// 	s.logger.Error("get application ids by audience id: ", zap.Error(err))
+		// 	continue
+		// }
 
-		if len(req_ids) == 0 {
-			s.logger.Info("no requests found", zap.Any("audience_id", audience.ID))
-			continue
-		}
+		// if len(req_ids) == 0 {
+		// 	s.logger.Info("no requests found", zap.Any("audience_id", audience.ID))
+		// 	continue
+		// }
 
 		// requests, err = s.mysqlRepo.ListApplicationsByIds(ctx, req_ids)
 		// if err != nil {
@@ -328,7 +362,7 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 		// 	continue
 		// }
 
-		audience.Application_ids = req_ids
+		// audience.Application_ids = req_ids
 
 		if integration_names, err := s.audienceRepo.GetIntegrationNamesByAudienceId(ctx, audience.ID); err != nil {
 			s.logger.Error("get integration names by audience id: ", zap.Error(err))
@@ -337,7 +371,12 @@ func (s *Service) ProcessAllAudiences(ctx context.Context) error {
 			audience.IntegrationNames = integration_names
 		}
 
-		if err := s.pushAudienceToRabbit(ctx, &audience); err != nil {
+		new_ids := make([]int64, 0, len(requests))
+		for _, application := range requests {
+			new_ids = append(new_ids, application.ID)
+		}
+
+		if err := s.pushAudienceToRabbit(ctx, &audience, new_ids, changed_applications); err != nil {
 			s.logger.Error("process audience failed",
 				zap.String("audience_id", string(audience.ID)),
 				zap.Error(err))
@@ -352,19 +391,36 @@ func (s *Service) ExportApplications(ctx context.Context, filter domain.Applicat
 	return s.exporter.ExportApplications(ctx, &filter)
 }
 
-func (s *Service) pushAudienceToRabbit(ctx context.Context, audience *domain.Audience) error {
-	chunks := splitIntoChunks(audience.Application_ids, 1000)
+func (s *Service) pushAudienceToRabbit(ctx context.Context, audience *domain.Audience, new_ids []int64, delete_ids []int64) error {
+	new_ids_chunks := splitIntoChunks(new_ids, 500)
+	delete_ids_chunks := splitIntoChunks(delete_ids, 500)
 
-	for i, chunk := range chunks {
+	messages := make([]domain.AudienceMessage, max(len(new_ids_chunks), len(delete_ids_chunks)))
 
-		message := domain.AudienceMessage{
-			CurrentChunk:    i+1,
-			TotalChunks:     len(chunks),
-			AudienceName:    audience.Name,
-			AudienceID:      audience.ID,
-			Integrations:    audience.Integrations,
-			Application_ids: chunk,
+	if len(new_ids) > 0 {
+		for i, chunk := range new_ids_chunks {
+			messages[i] = domain.AudienceMessage{
+				New_application_ids: chunk,
+			}
 		}
+	}
+
+	if len(delete_ids) > 0 {
+		for i, chunk := range delete_ids_chunks {
+			messages[i] = domain.AudienceMessage{
+				Delete_application_ids: chunk,
+			}
+		}
+	}
+
+	for i, message := range messages {
+		message.AudienceName = audience.Name
+		message.AudienceID = audience.ID
+		message.Integrations = audience.Integrations
+		message.TotalChunks = len(messages)
+		message.CurrentChunk = i + 1
+
+		s.logger.Info("publishing audience update message", zap.Any("message", message))
 
 		body, err := json.Marshal(message)
 		if err != nil {
@@ -373,10 +429,10 @@ func (s *Service) pushAudienceToRabbit(ctx context.Context, audience *domain.Aud
 
 		err = s.amqpChan.PublishWithContext(
 			ctx,
-			"audiences",        // exchange
-			"audience.updates", // routing key
-			false,              // mandatory
-			false,              // immediate
+			os.Getenv("RABBITMQ_EXCHANGE"),    // exchange
+			os.Getenv("RABBITMQ_ROUTING_KEY"), // routing key
+			false,                             // mandatory
+			false,                             // immediate
 			amqp.Publishing{
 				ContentType:  "application/json",
 				Body:         body,
@@ -398,61 +454,76 @@ func (s *Service) pushAudienceToRabbit(ctx context.Context, audience *domain.Aud
 }
 
 func (s *Service) GetRegions(ctx context.Context, filter *domain.RegionFilter) (*domain.RegionsResponse, error) {
-    s.logger.Info("getting regions data")//,
-        //zap.String("search", filter.Search),
-        //zap.Time("start_date", *filter.StartDate),
-        //zap.Time("end_date", *filter.EndDate),
-        //zap.String("sort", filter.Sort))
+	s.logger.Info("getting regions data") //,
+	//zap.String("search", filter.Search),
+	//zap.Time("start_date", *filter.StartDate),
+	//zap.Time("end_date", *filter.EndDate),
+	//zap.String("sort", filter.Sort))
 
-    response, err := s.mysqlRepo.GetRegionsData(ctx, filter)
-    if err != nil {
-        return nil, fmt.Errorf("get regions data: %w", err)
-    }
+	response, err := s.mysqlRepo.GetRegionsData(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("get regions data: %w", err)
+	}
 
-    // Validate response
-    if len(response.Data) == 0 {
-        s.logger.Warn("no regions data found")
-        return response, nil
-    }
+	// Validate response
+	if len(response.Data) == 0 {
+		s.logger.Warn("no regions data found")
+		return response, nil
+	}
 
-    s.logger.Info("got regions data",
-        zap.Int("total_projects", len(response.Data)),
-        zap.Int("total_regions", len(response.Headers)-2),
+	s.logger.Info("got regions data",
+		zap.Int("total_projects", len(response.Data)),
+		zap.Int("total_regions", len(response.Headers)-2),
 		zap.Any("footer", response.Footer),
 	)
 
-    return response, nil
+	return response, nil
+}
+
+func (s *Service) ExportRegions(ctx context.Context, filter *domain.RegionFilter) (string, string, error) {
+	s.logger.Info("exporting regions data")
+
+	response, err := s.mysqlRepo.GetRegionsData(ctx, filter)
+	if err != nil {
+		return "", "", fmt.Errorf("get regions data: %w", err)
+	}
+
+	filePath, fileName, err := s.exporter.ExportRegionsData(response)
+	if err != nil {
+		return "", "", fmt.Errorf("export regions data: %w", err)
+	}
+
+	return filePath, fileName, nil
 }
 
 func (s *Service) GetCallCenterReport(ctx context.Context, filter *domain.CallCenterReportFilter) (*domain.CallCenterReport, error) {
-    s.logger.Info("getting call center report", 
-        )
+	s.logger.Info("getting call center report")
 
-    report, err := s.mysqlRepo.GetCallCenterReportData(ctx, filter)
-    if err != nil {
-        return nil, fmt.Errorf("get call center report: %w", err)
-    }
+	report, err := s.mysqlRepo.GetCallCenterReportData(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("get call center report: %w", err)
+	}
 
-    // Process anomalies
-    //report.Anomalies = s.detectAnomalies(report.Data)
+	// Process anomalies
+	//report.Anomalies = s.detectAnomalies(report.Data)
 
-    return report, nil
+	return report, nil
 }
 
 func (s *Service) ExportCallCenterReport(ctx context.Context, filter *domain.CallCenterReportFilter) (string, string, error) {
-    s.logger.Info("exporting call center report")
+	s.logger.Info("exporting call center report")
 
-    report, err := s.mysqlRepo.GetCallCenterReportData(ctx, filter)
-    if err != nil {
-        return "", "", fmt.Errorf("get call center report: %w", err)
-    }
+	report, err := s.mysqlRepo.GetCallCenterReportData(ctx, filter)
+	if err != nil {
+		return "", "", fmt.Errorf("get call center report: %w", err)
+	}
 
-    filePath, fileName, err := s.exporter.ExportCallCenterReport(report)
-    if err != nil {
-        return "", "", fmt.Errorf("export to excel: %w", err)
-    }
+	filePath, fileName, err := s.exporter.ExportCallCenterReport(report)
+	if err != nil {
+		return "", "", fmt.Errorf("export to excel: %w", err)
+	}
 
-    return filePath, fileName, nil
+	return filePath, fileName, nil
 }
 
 func (s *Service) GetSpeedReport(ctx context.Context, filter *domain.StatusDurationFilter) (*domain.StatusDurationResponse, error) {
@@ -466,36 +537,51 @@ func (s *Service) GetSpeedReport(ctx context.Context, filter *domain.StatusDurat
 	return report, nil
 }
 
+// func (s *Service) ExportStatusDurationReport(ctx context.Context, filter *domain.StatusDurationFilter) (string, string, error) {
+// 	s.logger.Info("exporting speed report")
+
+// 	report, err := s.mysqlRepo.GetStatusDurationReport(ctx, filter)
+// 	if err != nil {
+// 		return "", "", fmt.Errorf("get speed report: %w", err)
+// 	}
+
+// 	filePath, fileName, err := s.exporter.ExportStatusDurationReport(report)
+// 	if err != nil {
+// 		return "", "", fmt.Errorf("export to excel: %w", err)
+// 	}
+
+// 	return filePath, fileName, nil
+// }
 
 func (s *Service) detectAnomalies(data []domain.ManagerMetrics) []string {
-    var anomalies []string
-    
-    // Calculate averages
-    var avgTargetConv, avgVisitConv, avgVisitSuccess float64
-    for _, m := range data {
-        avgTargetConv += m.TargetConversion
-        avgVisitConv += m.VisitConversion
-        avgVisitSuccess += m.VisitSuccess
-    }
-    count := float64(len(data))
-    avgTargetConv /= count
-    avgVisitConv /= count
-    avgVisitSuccess /= count
+	var anomalies []string
 
-    // Check for anomalies
-    for _, m := range data {
-        if m.TargetConversion < avgTargetConv*0.5 {
-            anomalies = append(anomalies, fmt.Sprintf("Низкая конверсия в целевые у %s: %.1f%%", m.ManagerName, m.TargetConversion))
-        }
-        if m.VisitConversion < avgVisitConv*0.5 {
-            anomalies = append(anomalies, fmt.Sprintf("Низкая конверсия в визиты у %s: %.1f%%", m.ManagerName, m.VisitConversion))
-        }
-        if m.VisitSuccess < avgVisitSuccess*0.5 {
-            anomalies = append(anomalies, fmt.Sprintf("Низкая успешность визитов у %s: %.1f%%", m.ManagerName, m.VisitSuccess))
-        }
-    }
+	// Calculate averages
+	var avgTargetConv, avgVisitConv, avgVisitSuccess float64
+	for _, m := range data {
+		avgTargetConv += m.TargetConversion
+		avgVisitConv += m.VisitConversion
+		avgVisitSuccess += m.VisitSuccess
+	}
+	count := float64(len(data))
+	avgTargetConv /= count
+	avgVisitConv /= count
+	avgVisitSuccess /= count
 
-    return anomalies
+	// Check for anomalies
+	for _, m := range data {
+		if m.TargetConversion < avgTargetConv*0.5 {
+			anomalies = append(anomalies, fmt.Sprintf("Низкая конверсия в целевые у %s: %.1f%%", m.ManagerName, m.TargetConversion))
+		}
+		if m.VisitConversion < avgVisitConv*0.5 {
+			anomalies = append(anomalies, fmt.Sprintf("Низкая конверсия в визиты у %s: %.1f%%", m.ManagerName, m.VisitConversion))
+		}
+		if m.VisitSuccess < avgVisitSuccess*0.5 {
+			anomalies = append(anomalies, fmt.Sprintf("Низкая успешность визитов у %s: %.1f%%", m.ManagerName, m.VisitSuccess))
+		}
+	}
+
+	return anomalies
 }
 
 func splitIntoChunks(ids []int64, chunkSize int) [][]int64 {

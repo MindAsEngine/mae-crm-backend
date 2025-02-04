@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/lib/pq"
 	"reporting-service/internal/domain"
-	//"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/zap"
 )
@@ -15,10 +14,10 @@ type PostgresAudienceRepository struct {
 	logger *zap.Logger
 }
 
-func NewPostgresAudienceRepository(db *sqlx.DB) *PostgresAudienceRepository {
+func NewPostgresAudienceRepository(db *sqlx.DB, logger *zap.Logger) *PostgresAudienceRepository {
 	return &PostgresAudienceRepository{
 		db:     db,
-		logger: zap.L().With(zap.String("repository", "postgres_audience")),
+		logger: logger,
 	}
 }
 
@@ -129,6 +128,42 @@ func (r *PostgresAudienceRepository) GetByID(ctx context.Context, id int64) (*do
             i.updated_at
         FROM integrations i
         WHERE i.audience_id = $1`
+
+	if err := r.db.SelectContext(ctx, &integrations, integrationsQuery, audience.ID); err != nil {
+		return nil, fmt.Errorf("select integrations: %w", err)
+	}
+
+	audience.Integrations = integrations
+	return audience, nil
+}
+
+func (r *PostgresAudienceRepository) GetByName(ctx context.Context, name string) (*domain.Audience, error) {
+	audience := &domain.Audience{}
+
+	query := `
+		SELECT 
+			a.id,
+			a.name,
+			a.created_at,
+			a.updated_at
+		FROM audiences a
+		WHERE a.name = $1
+		`
+
+	err := r.db.GetContext(ctx, audience, query, name)
+	if err != nil {
+		return nil, fmt.Errorf("select audience: %w", err)
+	}
+
+	var integrations []domain.Integration
+	integrationsQuery := `
+		SELECT 
+			i.id,
+			i.cabinet_name,
+			i.created_at,
+			i.updated_at
+		FROM integrations i
+		WHERE i.audience_id = $1`
 
 	if err := r.db.SelectContext(ctx, &integrations, integrationsQuery, audience.ID); err != nil {
 		return nil, fmt.Errorf("select integrations: %w", err)
@@ -393,6 +428,22 @@ func (r *PostgresAudienceRepository) GetApplicationIdsByAdienceId(ctx context.Co
 		return nil, fmt.Errorf("select ids: %w", err)
 	}
 	r.logger.Info("ids", zap.Any("ids", ids))
+	return ids, nil
+}
+
+func (r *PostgresAudienceRepository) GetApplicationIdsByAudienceName(ctx context.Context, name string) ([]string, error) {
+	var ids []string
+	query := `
+		SELECT 
+			ar.request_id
+		FROM audience_requests ar
+		LEFT JOIN audiences a ON ar.audience_id = a.id
+		WHERE a.name = $1`
+
+	if err := r.db.SelectContext(ctx, &ids, query, name); err != nil {
+		return nil, fmt.Errorf("select ids: %w", err)
+	}
+
 	return ids, nil
 }
 

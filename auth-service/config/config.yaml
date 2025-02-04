@@ -1,0 +1,8 @@
+server:
+  port: 8081
+  host: "localhost"
+
+logger:
+  level: "info"
+  encoding: "json"
+  output: "stdout"

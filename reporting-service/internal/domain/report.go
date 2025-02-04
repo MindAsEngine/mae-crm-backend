@@ -2,33 +2,11 @@ package domain
 
 import "time"
 
-type RegionReport struct {
-    Region      string `json:"region"`
-    Properties  int    `json:"properties"`
-    TotalAmount float64 `json:"total_amount"`
-}
-
 type SpeedReport struct {
     LeadID    int    `json:"lead_id"`
     LeadTime  string `json:"lead_time"`
     Status    string `json:"status"`
     Employee  string `json:"employee"`
-}
-
-
-
-// Фильтр для отчета по регионам
-type RegionReportFilter struct {
-	StartDate time.Time
-	EndDate   time.Time
-	Statuses  []string
-}
-
-// Строка отчета по регионам
-type RegionReportRow struct {
-	Region       string `db:"region"`
-	TotalClients int    `db:"total_clients"`
-	Purchases    int    `db:"purchases"`
 }
 
 // Фильтр для отчета по колл-центру
