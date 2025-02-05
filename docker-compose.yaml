@@ -9,7 +9,7 @@ services:
       dockerfile: Dockerfile
     container_name: frontend
     ports:
-      - "3000:3000"
+      - "3333:3000"
     volumes:
       - ./mae-crm-frontend/src:/app/src
       - ./mae-crm-frontend/public:/app/public
@@ -36,7 +36,7 @@ services:
     env_file: 
       - ./.env
     ports:
-      - "8081:8081"
+      - "8082:8081"
     networks:
       - app-network
 
