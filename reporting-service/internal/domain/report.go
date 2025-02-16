@@ -17,14 +17,15 @@ type CallCenterReportFilter struct {
 
 // Строка отчета по колл-центру
 type ManagerMetrics struct {
+    ManagerID            int     `json:"manager_id" db:"users_id"`
     IsAnomaly            bool    `json:"is_anomaly,omitempty"`
     ManagerName          string  `json:"manager_name" db:"users_name"`
-    TotalInquiries       int     `json:"total_inquiries" db:"total_inquiries"`
-    TargetInquiries      int     `json:"target_inquiries" db:"target_inquiries"`
+    TotalInquiries       int     `json:"total_inquiries" db:"total_requests"`
+    TargetInquiries      int     `json:"target_inquiries" db:"target_requests"`
     TargetConversion     float64 `json:"target_conversion"`
     AppointedVisits      int     `json:"appointed_visits" db:"appointed_visits"`
     VisitConversion      float64 `json:"visit_conversion"`
-    CompletedVisits      int     `json:"completed_visits" db:"completed_visits"`
+    CompletedVisits      int     `json:"completed_visits" db:"successful_visits"`
     VisitSuccess         float64 `json:"visit_success"`
     LeadToVisit          float64 `json:"lead_to_visit"`
     // Optional metrics

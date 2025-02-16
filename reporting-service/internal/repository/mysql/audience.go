@@ -1035,61 +1035,95 @@ func (r *MySQLAudienceRepository) GetRegionsData(ctx context.Context, filter *do
 }
 
 func (r *MySQLAudienceRepository) GetCallCenterReportData(ctx context.Context, filter *domain.CallCenterReportFilter) (*domain.CallCenterReport, error) {
-	query := `
-        SELECT
-            u.users_name,
-            COUNT(*) as total_inquiries,
-            COUNT(CASE 
-                WHEN eb.status_name IN ('Подбор', 'Отказ') 
-                THEN 1 
-            END) as target_inquiries,
-            COUNT(CASE 
-                WHEN eb.status_name = 'Подбор' AND eb.custom_status_name = 'Визит состоялся'
-                THEN 1 
-            END) as completed_visits,
-            COUNT(CASE 
-                WHEN eb.status_name = 'Подбор' AND eb.custom_status_name = 'Назначенная встреча'
-                THEN 1 
-            END) as appointed_visits 
-            -- COUNT(CASE 
-            --     WHEN eb.status_name = 'Бронь'
-            --     THEN 1 
-            -- END) as brons,
-            -- COUNT(CASE 
-            --     WHEN eb.status_name IN ('Сделка проведена', 'Сделка в работе')
-            --     THEN 1 
-            -- END) as ddus
-        FROM estate_buys eb 
-        RIGHT JOIN users u ON eb.manager_id = u.id
-        LEFT JOIN estate_buys_statuses_log ebsl ON eb.id = ebsl.estate_buy_id
-        WHERE eb.company_id = 528 AND
-        u.departments_id = 1903
-	`
 
-	orderClause := " GROUP BY u.users_name ORDER BY u.users_name DESC" // Default sorting
-
-	var args []interface{}
-
-	whereConditions := []string{}
-
-	if filter.EndDate != nil && !filter.EndDate.IsZero() {
-		whereConditions = append(whereConditions, "eb.date_added <= ?")
-		args = append(args, filter.EndDate)
-	}
+	StartDateCondition := ""
+	EndDateCondition := ""
 
 	if filter.StartDate != nil && !filter.StartDate.IsZero() {
-		whereConditions = append(whereConditions, "eb.date_added >= ?")
-		args = append(args, filter.StartDate)
+		StartDateCondition = " AND ebsl.log_date >= "+filter.StartDate.Format("2006-01-02")
 	}
 
-	if len(whereConditions) > 0 {
-		query += " AND " + strings.Join(whereConditions, " AND ")
+	if filter.EndDate != nil && !filter.EndDate.IsZero() {
+		EndDateCondition =  " AND ebsl.log_date <= "+filter.EndDate.Format("2006-01-02")
 	}
 
-	query += orderClause
+
+	query := `
+	SELECT 
+	    t1.users_id,
+        u.users_name,
+	    COALESCE(total_requests, 0) AS total_requests,
+	    COALESCE(target_requests, 0) AS target_requests,
+	    COALESCE(appointed_visits, 0) AS appointed_visits,
+        COALESCE(successful_visits, 0) AS successful_visits
+	FROM (
+	    -- Общее количество заявок
+	    SELECT 
+	        ebsl.users_id,
+	        COUNT(DISTINCT ebsl.estate_buy_id) AS total_requests
+	    FROM estate_buys_statuses_log ebsl
+		WHERE 1=1 `+StartDateCondition+EndDateCondition+`
+	    GROUP BY ebsl.users_id
+	) t1
+	LEFT JOIN (
+	    -- Количество целевых заявок
+	    SELECT 
+	        ebsl.users_id,
+	        COUNT(*) AS target_requests
+	    FROM estate_buys_statuses_log ebsl
+	    WHERE status_custom_to_name != 'Нецелевой' `+StartDateCondition+EndDateCondition+`
+	    GROUP BY ebsl.users_id
+	) t2 ON t1.users_id = t2.users_id
+	LEFT JOIN (
+	    -- Количество назначенных визитов
+	    SELECT 
+	        ebsl.users_id,
+	        COUNT(*) AS appointed_visits
+	    FROM estate_buys_statuses_log ebsl
+	    WHERE (status_from_name IN ('Проверка', 'Подбор', 'Неразобранное')) 
+	          AND status_custom_to_name = 'Назначенная встреча' `+StartDateCondition+EndDateCondition+`
+	    GROUP BY ebsl.users_id
+	) t3 ON t1.users_id = t3.users_id 
+    LEFT JOIN (
+		WITH LastCallCenterManager AS (
+		-- Находим последнего менеджера из колл-центра перед изменением статуса на "Состоялся визит"
+		SELECT 
+			ebsl.estate_buy_id,
+			MAX(ebsl.id) AS last_cc_log_id
+		FROM estate_buys_statuses_log ebsl
+		JOIN users u ON u.id = ebsl.users_id
+		WHERE u.departments_id = 1903 `+StartDateCondition+EndDateCondition+`
+		GROUP BY ebsl.estate_buy_id
+	),
+	FinalVisits AS (
+		-- Фиксируем заявки, у которых статус изменился на "Состоялся визит"
+		SELECT 
+			estate_buy_id,
+			users_id AS final_manager
+		FROM estate_buys_statuses_log ebsl
+		WHERE status_custom_to_name = 'Визит состоялся' `+StartDateCondition+EndDateCondition+`
+	)
+	-- Теперь считаем заявки для каждого менеджера
+	SELECT 
+		users_id,
+		COUNT(DISTINCT lv.estate_buy_id) AS successful_visits
+	FROM LastCallCenterManager lccm
+	JOIN estate_buys_statuses_log ebsl ON ebsl.id = lccm.last_cc_log_id  -- Последняя запись от колл-центра
+	JOIN FinalVisits lv ON lv.estate_buy_id = ebsl.estate_buy_id  -- Заявка должна быть завершена другим менеджером
+	JOIN users u ON u.id = ebsl.users_id  -- Берём ID последнего менеджера колл-центра
+	WHERE 1=1 `+StartDateCondition+EndDateCondition+`
+	GROUP BY u.id
+	ORDER BY successful_visits DESC
+    ) t4 ON t1.users_id = t4.users_id 
+    LEFT JOIN
+		users u on t1.users_id = u.id
+		WHERE u.departments_id=1903
+		ORDER BY users_id;
+	`
+
 	var metrics []domain.ManagerMetrics
 
-	if err := r.db.SelectContext(ctx, &metrics, query, args...); err != nil {
+	if err := r.db.SelectContext(ctx, &metrics, query); err != nil {
 		return nil, fmt.Errorf("get sales metrics: %w", err)
 	}
 
