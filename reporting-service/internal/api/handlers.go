@@ -490,7 +490,8 @@ func (h *Handler) GetCallCenterReport(w http.ResponseWriter, r *http.Request) {
 	filter := &domain.CallCenterReportFilter{
 		StartDate: &time_from, 
 		EndDate:   &time_to} 
-
+		
+	h.logger.Info("GetCallCenterReport", zap.Any("time_from", filter.StartDate.Format("2006-01-02")), zap.Any("time_to", filter.EndDate.Format("2006-01-02")))
     // Get report from service
     report, err := h.audienceService.GetCallCenterReport(ctx, filter)
     if err != nil {

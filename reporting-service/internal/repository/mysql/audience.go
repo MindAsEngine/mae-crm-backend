@@ -1040,13 +1040,12 @@ func (r *MySQLAudienceRepository) GetCallCenterReportData(ctx context.Context, f
 	EndDateCondition := ""
 
 	if filter.StartDate != nil && !filter.StartDate.IsZero() {
-		StartDateCondition = " AND ebsl.log_date >= "+filter.StartDate.Format("2006-01-02")
+		StartDateCondition = " AND ebsl.log_date >= '"+filter.StartDate.Format("2006-01-02")+"'"
 	}
 
 	if filter.EndDate != nil && !filter.EndDate.IsZero() {
-		EndDateCondition =  " AND ebsl.log_date <= "+filter.EndDate.Format("2006-01-02")
+		EndDateCondition =  " AND ebsl.log_date <= '"+filter.EndDate.Format("2006-01-02")+"'"
 	}
-
 
 	query := `
 	SELECT 
@@ -1057,61 +1056,55 @@ func (r *MySQLAudienceRepository) GetCallCenterReportData(ctx context.Context, f
 	    COALESCE(appointed_visits, 0) AS appointed_visits,
         COALESCE(successful_visits, 0) AS successful_visits
 	FROM (
-	    -- Общее количество заявок
 	    SELECT 
 	        ebsl.users_id,
 	        COUNT(DISTINCT ebsl.estate_buy_id) AS total_requests
 	    FROM estate_buys_statuses_log ebsl
-		WHERE 1=1 `+StartDateCondition+EndDateCondition+`
+		WHERE 1=1`+ StartDateCondition + EndDateCondition +`
 	    GROUP BY ebsl.users_id
 	) t1
 	LEFT JOIN (
-	    -- Количество целевых заявок
 	    SELECT 
 	        ebsl.users_id,
 	        COUNT(*) AS target_requests
 	    FROM estate_buys_statuses_log ebsl
-	    WHERE status_custom_to_name != 'Нецелевой' `+StartDateCondition+EndDateCondition+`
+	    WHERE status_custom_to_name != 'Нецелевой'`+ StartDateCondition + EndDateCondition +`
 	    GROUP BY ebsl.users_id
 	) t2 ON t1.users_id = t2.users_id
 	LEFT JOIN (
-	    -- Количество назначенных визитов
 	    SELECT 
 	        ebsl.users_id,
 	        COUNT(*) AS appointed_visits
 	    FROM estate_buys_statuses_log ebsl
 	    WHERE (status_from_name IN ('Проверка', 'Подбор', 'Неразобранное')) 
-	          AND status_custom_to_name = 'Назначенная встреча' `+StartDateCondition+EndDateCondition+`
+	          AND status_custom_to_name = 'Назначенная встреча' `+ StartDateCondition + EndDateCondition +`
 	    GROUP BY ebsl.users_id
 	) t3 ON t1.users_id = t3.users_id 
     LEFT JOIN (
 		WITH LastCallCenterManager AS (
-		-- Находим последнего менеджера из колл-центра перед изменением статуса на "Состоялся визит"
 		SELECT 
 			ebsl.estate_buy_id,
 			MAX(ebsl.id) AS last_cc_log_id
 		FROM estate_buys_statuses_log ebsl
 		JOIN users u ON u.id = ebsl.users_id
-		WHERE u.departments_id = 1903 `+StartDateCondition+EndDateCondition+`
+		WHERE u.departments_id = 1903`+ StartDateCondition + EndDateCondition +`
 		GROUP BY ebsl.estate_buy_id
 	),
 	FinalVisits AS (
-		-- Фиксируем заявки, у которых статус изменился на "Состоялся визит"
 		SELECT 
 			estate_buy_id,
 			users_id AS final_manager
 		FROM estate_buys_statuses_log ebsl
-		WHERE status_custom_to_name = 'Визит состоялся' `+StartDateCondition+EndDateCondition+`
+		WHERE status_custom_to_name = 'Визит состоялся'`+ StartDateCondition + EndDateCondition +`
 	)
-	-- Теперь считаем заявки для каждого менеджера
 	SELECT 
 		users_id,
 		COUNT(DISTINCT lv.estate_buy_id) AS successful_visits
 	FROM LastCallCenterManager lccm
-	JOIN estate_buys_statuses_log ebsl ON ebsl.id = lccm.last_cc_log_id  -- Последняя запись от колл-центра
-	JOIN FinalVisits lv ON lv.estate_buy_id = ebsl.estate_buy_id  -- Заявка должна быть завершена другим менеджером
-	JOIN users u ON u.id = ebsl.users_id  -- Берём ID последнего менеджера колл-центра
-	WHERE 1=1 `+StartDateCondition+EndDateCondition+`
+	JOIN estate_buys_statuses_log ebsl ON ebsl.id = lccm.last_cc_log_id  
+	JOIN FinalVisits lv ON lv.estate_buy_id = ebsl.estate_buy_id  
+	JOIN users u ON u.id = ebsl.users_id  
+	WHERE 1=1`+ StartDateCondition + EndDateCondition +`
 	GROUP BY u.id
 	ORDER BY successful_visits DESC
     ) t4 ON t1.users_id = t4.users_id 
