@@ -470,26 +470,26 @@ func (h *Handler) ExportRegions(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetCallCenterReport(w http.ResponseWriter, r *http.Request) {
     ctx := r.Context()
 
-	// time_from := time.Now().AddDate(-30, 0, 0)
-	// time_to := time.Now()
-    // err:= error(nil)
-	// if r.URL.Query().Get("start_date") != "" {
-	// 	time_from, err = time.Parse(time.RFC3339, r.URL.Query().Get("start_date"))
-	// 	if err != nil  {
-	// 		h.errorResponse(w, "invalid date_from format", err, http.StatusBadRequest)
-	// 		return
-	// 	}
-	// }
-	// if r.URL.Query().Get("end_date") != "" {
-	// 	time_to, err = time.Parse(time.RFC3339, r.URL.Query().Get("end_date"))
-	// 	if err != nil {
-	// 		h.errorResponse(w, "invalid date_to format", err, http.StatusBadRequest)
-	// 		return
-	// 	}
-	// }
+	time_from := time.Now().AddDate(-365, 0, 0)
+	time_to := time.Now()
+    err:= error(nil)
+	if r.URL.Query().Get("start_date") != "" {
+		time_from, err = time.Parse(time.RFC3339, r.URL.Query().Get("start_date"))
+		if err != nil  {
+			h.errorResponse(w, "invalid date_from format", err, http.StatusBadRequest)
+			return
+		}
+	}
+	if r.URL.Query().Get("end_date") != "" {
+		time_to, err = time.Parse(time.RFC3339, r.URL.Query().Get("end_date"))
+		if err != nil {
+			h.errorResponse(w, "invalid date_to format", err, http.StatusBadRequest)
+			return
+		}
+	}
 	filter := &domain.CallCenterReportFilter{
-		StartDate: nil, //&time_from,
-		EndDate:   nil} //&time_to,}
+		StartDate: &time_from, 
+		EndDate:   &time_to} 
 
     // Get report from service
     report, err := h.audienceService.GetCallCenterReport(ctx, filter)
