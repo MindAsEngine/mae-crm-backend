@@ -470,7 +470,7 @@ func (h *Handler) ExportRegions(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetCallCenterReport(w http.ResponseWriter, r *http.Request) {
     ctx := r.Context()
 
-	time_from := time.Now().AddDate(-365, 0, 0)
+	time_from := time.Now().AddDate(-1, 0, 0)
 	time_to := time.Now()
     err:= error(nil)
 	if r.URL.Query().Get("start_date") != "" {
