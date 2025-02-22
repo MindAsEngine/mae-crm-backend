@@ -76,8 +76,8 @@ func (h *Handler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		Patronymic:    creds.Patronymic,
 		PasswordHash:  string(hashed),
 		RefreshToken:  "",
-		RTTokenExpiry: time.Now().Add(1 * 24 * time.Hour), // 7 days
-		ATTokenExpiry: time.Now().Add(7 * 24 * time.Hour), // 7 days
+		RTTokenExpiry: time.Date(0,0,0,0,0,0,0, time.Now().Location()), //time.Now().Add(1 * 24 * time.Hour), // 7 days
+		ATTokenExpiry: time.Date(0,0,0,0,0,0,0, time.Now().Location()), //time.Now().Add(7 * 24 * time.Hour), // 7 days
 	})
 	if err != nil {
 		http.Error(w, "Conflict: user may already exist", http.StatusConflict)
@@ -138,7 +138,12 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		bson.M{"_id": dbUser.ID}, // Use _id instead of login
 		bson.M{"$set": bson.M{
 			"refresh_token": refreshToken,
-		}},
+			"rt_token_expiry": time.Now().Add(1 * 24 * time.Hour),
+			"at_token_expiry": time.Now().Add(7 * 24 * time.Hour),
+		},
+	},
+
+		
 	)
 	if err != nil {
 		h.logger.Error("Failed to update user refresh token", zap.Error(err))

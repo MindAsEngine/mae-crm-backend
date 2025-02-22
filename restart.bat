@@ -16,6 +16,15 @@ docker rmi goldenhouserepo-reporting-service
 docker rmi goldenhouserepo-auth-service
 docker rmi goldenhouserepo-ads-integration-service
 docker rmi goldenhouserepo-frontend
+docker rmi goldenhouserepo-mongo
+docker rmi goldenhouserepo-db
+
+docker volume rm goldenhouserepo_ads_integration_volume
+docker volume rm goldenhouserepo_auth_data
+docker volume rm goldenhouserepo_frontend_data
+docker volume rm goldenhouserepo_postgres_data
+docker volume rm goldenhouserepo_rabbitmq_data
+
 if %ERRORLEVEL% NEQ 0 echo Failed to remove image but continuing...
 
 echo Starting services with docker-compose...

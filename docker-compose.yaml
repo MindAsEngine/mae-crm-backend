@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: frontend
     ports:
-      - "3333:3000"
+      - "3000:3000"
     volumes:
       - ./mae-crm-frontend/src:/app/src
       - ./mae-crm-frontend/public:/app/public
@@ -21,6 +21,7 @@ services:
       - ./.env
     volumes:
       - auth_data:/data/db
+      - ./docker/mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
     ports:
       - "27017:27017"
     networks:
@@ -53,14 +54,16 @@ services:
       - ./.env
     networks:
       - app-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "curl", "http://reporting-service:8080/api/health"]
       interval: 5s
       timeout: 5s
       retries: 5
     depends_on:
-      mysql:
-        condition: service_healthy
+      # mysql:
+      #   condition: service_healthy
       db:
         condition: service_healthy
       auth-service:
@@ -77,8 +80,10 @@ services:
     volumes:
       - ads_integration_volume:/app
     depends_on:
-      mysql:
-        condition: service_healthy
+      reporting-service:
+        condition: service_started
+      # mysql:
+      #   condition: service_healthy
       db:
         condition: service_healthy
     networks:
@@ -86,7 +91,9 @@ services:
   
   # PostgreSQL
   db:
-    image: postgres:15
+    build:
+      context: ./docker/postgres
+      dockerfile: Dockerfile
     container_name: postgres
     env_file: 
       - ./.env
@@ -94,7 +101,6 @@ services:
       - "55432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docker/postgres/init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d reports_db"]
       interval: 5s
@@ -108,28 +114,28 @@ services:
       - app-network
 
   # MySQL
-  mysql:
-    image: mysql:8.0
-    container_name: mysql
-    env_file: 
-      - ./.env
-    ports:
-      - "33306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./docker/mysql/init:/docker-entrypoint-initdb.d
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "user", "-ppassword"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    command: --default-authentication-plugin=mysql_native_password
-    depends_on:
-      - rabbitmq
-      # - redis
-      # - elasticsearch
-    networks:
-      - app-network
+  # mysql:
+  #   image: mysql:8.0
+  #   container_name: mysql
+  #   env_file: 
+  #     - ./.env
+  #   ports:
+  #     - "33306:3306"
+  #   volumes:
+  #     - mysql_data:/var/lib/mysql
+  #     - ./docker/mysql/init:/docker-entrypoint-initdb.d
+  #   healthcheck:
+  #     test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "user", "-ppassword"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
+  #   command: --default-authentication-plugin=mysql_native_password
+  #   depends_on:
+  #     - rabbitmq
+  #     # - redis
+  #     # - elasticsearch
+  #   networks:
+  #     - app-network
 
   # RabbitMQ
   rabbitmq:
