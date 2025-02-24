@@ -18,7 +18,7 @@ services:
     image: mongo:6
     container_name: mongodb
     env_file: 
-      - ./.env
+      - ./environment.env
     volumes:
       - auth_data:/data/db
       - ./docker/mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
@@ -33,7 +33,7 @@ services:
     depends_on:
       - mongodb
     env_file: 
-      - ./.env
+      - ./environment.env
     ports:
       - "8082:8081"
     networks:
@@ -51,7 +51,7 @@ services:
     volumes:
       - export_data:/app/export
     env_file: 
-      - ./.env
+      - ./environment.env
     networks:
       - app-network
     extra_hosts:
@@ -76,14 +76,12 @@ services:
       context: ./ads-integration-service
       dockerfile: Dockerfile
     env_file: 
-      - ./.env
+      - ./environment.env
     volumes:
       - ads_integration_volume:/app
     depends_on:
       reporting-service:
         condition: service_started
-      # mysql:
-      #   condition: service_healthy
       db:
         condition: service_healthy
     networks:
@@ -96,7 +94,7 @@ services:
       dockerfile: Dockerfile
     container_name: postgres
     env_file: 
-      - ./.env
+      - ./environment.env
     ports:
       - "55432:5432"
     volumes:
@@ -108,34 +106,8 @@ services:
       retries: 5
     depends_on:
       - rabbitmq
-      # - redis
-      # - elasticsearch
     networks:
       - app-network
-
-  # MySQL
-  # mysql:
-  #   image: mysql:8.0
-  #   container_name: mysql
-  #   env_file: 
-  #     - ./.env
-  #   ports:
-  #     - "33306:3306"
-  #   volumes:
-  #     - mysql_data:/var/lib/mysql
-  #     - ./docker/mysql/init:/docker-entrypoint-initdb.d
-  #   healthcheck:
-  #     test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "user", "-ppassword"]
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 5
-  #   command: --default-authentication-plugin=mysql_native_password
-  #   depends_on:
-  #     - rabbitmq
-  #     # - redis
-  #     # - elasticsearch
-  #   networks:
-  #     - app-network
 
   # RabbitMQ
   rabbitmq:
@@ -146,7 +118,7 @@ services:
       - "5672:5672"
       - "15672:15672"
     env_file: 
-      - ./.env  
+      - ./environment.env  
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
@@ -156,35 +128,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
-  # Elasticsearch
-  # elasticsearch:
-  #   restart: unless-stopped
-  #   image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
-  #   container_name: elasticsearch
-  #   environment:
-  #     - discovery.type=single-node
-  #     - xpack.security.enabled=false
-  #   ports:
-  #     - "8088:9200"
-  #     - "8089:9300"
-  #   volumes:
-  #     - es_data:/usr/share/elasticsearch/data
-  #   networks:
-  #     - app-network
-
-  #  Redis
-  #   redis:
-  #     restart: unless-stopped
-  #     image: redis:7
-  #     container_name: redis
-  #     volumes:
-  #       - redis_data:/data
-  #     ports:
-  #       - "6379:6379"
-  #     networks:
-  #       - app-network
-
 
 volumes:
   auth_data:

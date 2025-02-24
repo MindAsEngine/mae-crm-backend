@@ -14,4 +14,4 @@ ads-integration-service/__pycache__/logger.cpython-310.pyc
 
 mae-crm-frontend/*
 plan.md
-.env
+*.env
