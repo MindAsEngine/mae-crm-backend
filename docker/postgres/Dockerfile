@@ -1,4 +1,4 @@
-FROM postgres:latest
+FROM postgres:17
 
 # Копируем файлы
 COPY init.dump /docker-entrypoint-initdb.d/init.dump
