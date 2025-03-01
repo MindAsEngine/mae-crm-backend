@@ -40,7 +40,7 @@ func (h *Handler) RegisterPublicRoutes(r *mux.Router) {
 	api := r.PathPrefix("/api").Subrouter()
 
 	api.HandleFunc("/auth/login", h.Login).Methods(http.MethodPost)
-	api.HandleFunc("/auth/health", h.HealthCheck).Methods(http.MethodGet)
+	api.HandleFunc("/health", h.HealthCheck).Methods(http.MethodGet)
 }
 
 func (h *Handler) RegisterProtectedRoutes(r *mux.Router) {
@@ -48,7 +48,8 @@ func (h *Handler) RegisterProtectedRoutes(r *mux.Router) {
 
 	// Auth endpoints
 	api.HandleFunc("/auth/register", h.Register).Methods(http.MethodPost)
-
+	api.HandleFunc("/users/{user_id}", h.UpdateUser).Methods(http.MethodPut)
+	
 	// Audiences endpoints
 	api.HandleFunc("/audiences", h.GetAudiences).Methods(http.MethodGet)
 	api.HandleFunc("/audiences", h.CreateAudience).Methods(http.MethodPost)
@@ -77,6 +78,8 @@ func (h *Handler) RegisterProtectedRoutes(r *mux.Router) {
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("Login-Handler request:", zap.Any("request", r))
+	
 	resp, err := http.Post("http://auth-service:8081/login", "application/json", r.Body)
 	if err != nil {
 		h.errorResponse(w, "failed to connect to auth service", err, http.StatusInternalServerError)
@@ -117,6 +120,31 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	token := string(responseBody)
 	h.jsonResponse(w, token, http.StatusOK)
+}
+
+func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
+	user_id := vars["user_id"]
+
+	resp, err := http.Post("http://auth-service:8081/update_user/"+user_id, "application/json", r.Body)
+	if err != nil {
+		h.errorResponse(w, "failed to connect to auth service", err, http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		h.errorResponse(w, "failed to update user", nil, resp.StatusCode)
+		return
+	}
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		h.errorResponse(w, "failed to read auth response", err, http.StatusInternalServerError)
+		return
+	}
+	token := string(responseBody)
+	h.jsonResponse(w, token ,http.StatusCreated)
 }
 
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {

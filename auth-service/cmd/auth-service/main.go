@@ -41,7 +41,7 @@ func main() {
 	// Connect to Mongo
 	mongoURI := os.Getenv("MONGO_URI")
 	if mongoURI == "" {
-		mongoURI = "mongodb://localhost:27017"
+		mongoURI = "mongodb://mongodb:27017"
 	}
 	if err := mongorepo.ConnectMongo(context.Background(), mongoURI); err != nil {
 		log.Fatal("MongoDB connection error:", err)

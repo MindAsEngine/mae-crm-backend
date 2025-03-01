@@ -41,7 +41,7 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/login", h.LoginHandler).Methods(http.MethodPost)
 	r.HandleFunc("/register", h.RegisterHandler).Methods(http.MethodPost)
 	r.HandleFunc("/validate", h.ValidateToken).Methods(http.MethodPost)
-
+	r.HandleFunc("/update/{user_id}", h.UpdateUser).Methods(http.MethodPost)
 }
 
 // RegisterHandler creates a new user in MongoDB with a hashed password.
@@ -91,25 +91,29 @@ func (h *Handler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 // LoginHandler verifies credentials and returns a JWT on success.
 // The JWT includes a "role" claim that should be set appropriately, e.g., "admin" or "user".
 func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("LoginHandler called")
+	
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
+	h.logger.Info("Method allowed")
 	var creds models.Credentials
 	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}
-
+	h.logger.Info("Credentials decoded")
 	// Find user in MongoDB
 	var dbUser models.UserDetails
 	err := h.db.UsersCollection().FindOne(context.Background(), bson.M{"login": creds.Username}).Decode(&dbUser)
 	if err == mongo.ErrNoDocuments {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		h.logger.Error( "User not found", zap.String("username", creds.Username))
 		return
 	} else if err != nil {
 		http.Error(w, "Internal Error", http.StatusInternalServerError)
+		h.logger.Error("Internal error ", zap.Error(err))
 		return
 	}
 
@@ -118,7 +122,7 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-
+	h.logger.Info("Password matched")
 	// Generate JWT (hardcoded role for demo: "admin" or "user")
 	//userRole := "admin" // or "user", based on your own logic
 	accessToken, err := generateAccessToken(&dbUser)
@@ -127,12 +131,14 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.logger.Info("Access token generated")
 	refreshToken, err := generateRefreshToken()
 	if err != nil {
 		h.jsonResponse(w, "Refresh token generation error", http.StatusInternalServerError)
 		return
 	}
 
+	h.logger.Info("Refresh token generated")
 	result, err := h.db.UsersCollection().UpdateOne(
 		context.Background(),
 		bson.M{"_id": dbUser.ID}, // Use _id instead of login
@@ -140,20 +146,23 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 			"refresh_token": refreshToken,
 			"rt_token_expiry": time.Now().Add(1 * 24 * time.Hour),
 			"at_token_expiry": time.Now().Add(7 * 24 * time.Hour),
+			},
 		},
-	},
-
-		
 	)
+
+	h.logger.Info("User updated with new expiry dates")
 	if err != nil {
 		h.logger.Error("Failed to update user refresh token", zap.Error(err))
 		h.jsonResponse(w, "Refresh token update error", http.StatusInternalServerError)
 		return
 	}
+	
+	h.logger.Info("User updated with new tokens")
 	if result.MatchedCount == 0 {
 		h.jsonResponse(w, "User not found", http.StatusNotFound)
 		return
 	}
+
 
 	// Then store in refresh_tokens collection
 	refreshTokenData := &models.RefreshTokenData{
@@ -162,14 +171,17 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 	}
 
+	h.logger.Info("New token generated")
 	if err := h.db.StoreRefreshToken(refreshTokenData); err != nil {
 		h.logger.Error("Failed to store refresh token", zap.Error(err))
 		h.jsonResponse(w, "Refresh token store error", http.StatusInternalServerError)
 		return
 	}
 
+	h.logger.Info("Stored new token")
+
 	h.db.DeleteRefreshTokensByUser(dbUser.ID.Hex(), refreshToken)
-	
+	h.logger.Info("Deleted old refresh tokens")
 	var response = models.UserResponce{
 		UserDetails:  dbUser,
 		AccessToken:  accessToken,
@@ -209,6 +221,50 @@ func (h *Handler) ValidateToken(w http.ResponseWriter, r *http.Request) {
 		"valid":  true,
 		"claims": claims,
 	})
+}
+
+func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request){
+	vars := mux.Vars(r)
+
+	user_id := vars["user_id"]
+	
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var creds models.Credentials
+	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+
+	// Hash password
+	hashed, err := bcrypt.GenerateFromPassword([]byte(creds.Password), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, "Internal Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Insert new user into MongoDB
+
+	_, err = h.db.UsersCollection().UpdateOne(context.Background(), models.UserDetails{
+		Username: 	creds.Username,
+		FirstName:     creds.FirstName,
+		LastName:      creds.LastName,
+		Patronymic:    creds.Patronymic,
+		PasswordHash:  string(hashed),
+		RefreshToken:  "",
+		RTTokenExpiry: time.Date(0,0,0,0,0,0,0, time.Now().Location()), //time.Now().Add(1 * 24 * time.Hour), // 7 days
+		ATTokenExpiry: time.Date(0,0,0,0,0,0,0, time.Now().Location()), //time.Now().Add(7 * 24 * time.Hour), // 7 days
+	}, bson.M{"ID": user_id})
+	if err != nil {
+		http.Error(w, "Conflict: user may already exist", http.StatusConflict)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	fmt.Fprint(w, "UserDetails registered successfully")
 }
 
 func (h *Handler) jsonResponse(w http.ResponseWriter, data interface{}, code int) {
