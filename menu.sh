@@ -20,8 +20,7 @@ user_menu="Введите команду из списка:
     6 | start - запуск приложения
     7 | purge - полная очистка (dev only)
     8 | exit - выход
-    clear - очистить терминал
-    "
+    clear - очистить терминал"
     
 mode="user"
 if [[ "$1" == "dev" ]]; then
@@ -106,7 +105,7 @@ while true; do
             echo "Все переменные установлены."
             sleep 2
             ;;
-        2 | update)   
+        2 | update)
             echo "Обновить приложение из GitHub - [Y] из архива/отменить - [Any]"
             read -r confirm_git
             if [[ "$confirm_git" =~ ^[Yy]$ ]]; then
