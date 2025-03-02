@@ -1,8 +1,6 @@
 #!/bin/bash
 docker compose down
 
-chmod -R u+w .
-
 ENV_FILE="environment.env"
 TMP_FILE=$(mktemp)
 backend_repo=$""
@@ -128,7 +126,7 @@ else
     echo "Загрузить из архива - [Y] отмена обновления - [Any])"
     read -r confirm_archive
     if [[ "$confirm_archive" =~ ^[Yy]$ ]]; then
-        unzip GoldenHouseRepo.zip -d "$(dirname "$0")"
+        tar -xvvf  GoldenHouseRepo.tar
         echo "Обновлено при помощи архива"
         sleep 1
     else
