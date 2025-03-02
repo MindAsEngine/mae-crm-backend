@@ -113,7 +113,7 @@ while true; do
 
                 # Если .git нет, инициализируем репозиторий
                 if [[ ! -d ".git" ]]; then
-                    git init
+                    git init -b "$backend_branch"
                     git remote add origin "$backend_repo"
                 fi
 
@@ -135,7 +135,7 @@ while true; do
 
                 # Аналогично настраиваем репозиторий для фронтенда
                 if [[ ! -d ".git" ]]; then
-                    git init
+                    git init -b "$frontend_branch"
                     git remote add origin "$frontend_repo"
                 fi
 
