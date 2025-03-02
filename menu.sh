@@ -109,45 +109,49 @@ while true; do
             echo "Обновить приложение из GitHub - [Y] из архива/отменить - [Any]"
             read -r confirm_git
             if [[ "$confirm_git" =~ ^[Yy]$ ]]; then
-                echo "Найден репозиторий $backend_repo и ветка $backend_branch. Загрузить из GitHub?  - [Y] / [Any]"
-                read -r confirm_git
-                if [[ "$confirm_git" =~ ^[Yy]$ ]]; then
-                    echo "Впервые загружаем из GitHub - [Y] / [Any]"
-                    read -r confirm_git
-                    if [[ "$confirm_git" =~ ^[Yy]$ ]]; then
-                        echo "Клонируем из $backend_repo"
-                        mkdir -p macro-crm-temp || { echo "Ошибка: не удалось создать macro-crm-temp"; continue; }
-                        cd macro-crm-temp || { echo "Ошибка: не удалось зайти в macro-crm-temp"; continue; }
-                        pwd
-                        git clone "$backend_repo" . || { echo "Ошибка: не удалось клонировать репозиторий"; continue; }
-                        git checkout "$backend_branch" || { echo "Ошибка: не удалось переключиться на ветку"; continue; }
-                        cd .. || { echo "Ошибка: не удалось выйти из macro-crm-temp"; continue; }
-                        mv macro-crm-temp/* . || { echo "Ошибка: не удалось переместить файлы"; continue; }
-                        rm -rf macro-crm-temp || { echo "Ошибка: не удалось удалить macro-crm-temp"; continue; }
-                        cd reporting-service || { echo "Ошибка: не удалось зайти в reporting-service"; continue; }
-                        mkdir -p export || { echo "Ошибка: не удалось создать папку export"; continue; }
-                        cd .. || { echo "Ошибка: не удалось выйти из reporting-service"; continue; }
-                        echo "Клонируем из $frontend_repo" 
-                        mkdir -p macro-crm-frontend || { echo "Ошибка: не удалось создать macro-crm-frontend"; continue; }
-                        cd mae-crm-frontend || { echo "Ошибка: не удалось зайти в macro-crm-frontend"; continue; }
-                        git clone "$frontend_repo" . || { echo "Ошибка: не удалось клонировать репозиторий"; continue; }
-                        git checkout "$frontend_branch" || { echo "Ошибка: не удалось переключиться на ветку"; continue; }
-                        cd .. || { echo "Ошибка: не удалось выйти из macro-crm-frontend"; continue; }
-                    else
-                        echo "Пуллим из $backend_repo $backend_branch"
-                        git fetch || { echo "Ошибка: не удалось получить изменения"; continue; }
-                        git pull "$backend_repo" "$backend_branch" || { echo "Ошибка: не удалось обновить репозиторий"; continue; }
-                        git checkout "$backend_branch" || { echo "Ошибка: не удалось переключиться на ветку"; continue; }
-                        echo "Пуллим из $frontend_repo $frontend_branch"
-                        cd macro-crm-frontend || { echo "Ошибка: не удалось зайти в macro-crm-frontend"; continue; }
-                        git fetch || { echo "Ошибка: не удалось получить изменения"; continue; }
-                        git pull "$frontend_repo" "$frontend_branch" || { echo "Ошибка: не удалось обновить репозиторий"; continue; }
-                        git checkout "$frontend_branch" || { echo "Ошибка: не удалось переключиться на ветку"; continue; }
-                        cd .. || { echo "Ошибка: не удалось выйти из macro-crm-frontend"; continue; }
-                    fi
+                echo "Настраиваем репозиторий в текущей папке..."
+
+                # Если .git нет, инициализируем репозиторий
+                if [[ ! -d ".git" ]]; then
+                    git init
+                    git remote add origin "$backend_repo"
                 fi
-                echo "Обновлено при помощи git"
-                sleep 1
+
+                # Проверяем, привязан ли origin к нужному репозиторию
+                current_origin=$(git remote get-url origin 2>/dev/null)
+                if [[ "$current_origin" != "$backend_repo" ]]; then
+                    echo "Меняем origin на $backend_repo"
+                    git remote remove origin
+                    git remote add origin "$backend_repo"
+                fi
+
+                # Загружаем изменения
+                git fetch origin
+                git checkout "$backend_branch"
+                git pull origin "$backend_branch"
+
+                echo "Настраиваем фронтенд..."
+                cd macro-crm-frontend || exit 1
+
+                # Аналогично настраиваем репозиторий для фронтенда
+                if [[ ! -d ".git" ]]; then
+                    git init
+                    git remote add origin "$frontend_repo"
+                fi
+
+                current_origin=$(git remote get-url origin 2>/dev/null)
+                if [[ "$current_origin" != "$frontend_repo" ]]; then
+                    echo "Меняем origin на $frontend_repo"
+                    git remote remove origin
+                    git remote add origin "$frontend_repo"
+                fi
+
+                git fetch origin
+                git checkout "$frontend_branch"
+                git pull origin "$frontend_branch"
+                cd ..
+                echo "Обновлено через git!"
+                
             else 
                 echo "Загрузить из архива - [Y] отмена обновления - [Any]"
                 read -r confirm_archive
@@ -159,7 +163,8 @@ while true; do
                     echo "Обновление отменено"
                 fi
             fi
-            sleep 2        
+            echo "Обновление завершено!"
+            sleep 2       
             ;;
         3 | images)
             echo "Удалять образы контейнеров (кроме бд)?  - [Y] / [Any]"
