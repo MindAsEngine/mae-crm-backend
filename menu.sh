@@ -116,34 +116,34 @@ while true; do
                     read -r confirm_git
                     if [[ "$confirm_git" =~ ^[Yy]$ ]]; then
                         echo "Клонируем из $backend_repo"
-                        mkdir -p macro-crm-temp || { echo "Ошибка: не удалось создать macro-crm-temp"; return 1; }
-                        cd macro-crm-temp || { echo "Ошибка: не удалось зайти в macro-crm-temp"; return 1; }
+                        mkdir -p macro-crm-temp || { echo "Ошибка: не удалось создать macro-crm-temp"; continue; }
+                        cd macro-crm-temp || { echo "Ошибка: не удалось зайти в macro-crm-temp"; continue; }
                         pwd
-                        git clone "$backend_repo" . || { echo "Ошибка: не удалось клонировать репозиторий"; return 1; }
-                        git checkout "$backend_branch" || { echo "Ошибка: не удалось переключиться на ветку"; return 1; }
-                        cd .. || { echo "Ошибка: не удалось выйти из macro-crm-temp"; return 1; }
-                        mv macro-crm-temp/* . || { echo "Ошибка: не удалось переместить файлы"; return 1; }
-                        rm -rf macro-crm-temp || { echo "Ошибка: не удалось удалить macro-crm-temp"; return 1; }
-                        cd reporting-service || { echo "Ошибка: не удалось зайти в reporting-service"; return 1; }
-                        mkdir -p export || { echo "Ошибка: не удалось создать папку export"; return 1; }
-                        cd .. || { echo "Ошибка: не удалось выйти из reporting-service"; return 1; }
+                        git clone "$backend_repo" . || { echo "Ошибка: не удалось клонировать репозиторий"; continue; }
+                        git checkout "$backend_branch" || { echo "Ошибка: не удалось переключиться на ветку"; continue; }
+                        cd .. || { echo "Ошибка: не удалось выйти из macro-crm-temp"; continue; }
+                        mv macro-crm-temp/* . || { echo "Ошибка: не удалось переместить файлы"; continue; }
+                        rm -rf macro-crm-temp || { echo "Ошибка: не удалось удалить macro-crm-temp"; continue; }
+                        cd reporting-service || { echo "Ошибка: не удалось зайти в reporting-service"; continue; }
+                        mkdir -p export || { echo "Ошибка: не удалось создать папку export"; continue; }
+                        cd .. || { echo "Ошибка: не удалось выйти из reporting-service"; continue; }
                         echo "Клонируем из $frontend_repo" 
-                        mkdir -p macro-crm-frontend || { echo "Ошибка: не удалось создать macro-crm-frontend"; return 1; }
-                        cd mae-crm-frontend || { echo "Ошибка: не удалось зайти в macro-crm-frontend"; return 1; }
-                        git clone "$frontend_repo" . || { echo "Ошибка: не удалось клонировать репозиторий"; return 1; }
-                        git checkout "$frontend_branch" || { echo "Ошибка: не удалось переключиться на ветку"; return 1; }
-                        cd .. || { echo "Ошибка: не удалось выйти из macro-crm-frontend"; return 1; }
+                        mkdir -p macro-crm-frontend || { echo "Ошибка: не удалось создать macro-crm-frontend"; continue; }
+                        cd mae-crm-frontend || { echo "Ошибка: не удалось зайти в macro-crm-frontend"; continue; }
+                        git clone "$frontend_repo" . || { echo "Ошибка: не удалось клонировать репозиторий"; continue; }
+                        git checkout "$frontend_branch" || { echo "Ошибка: не удалось переключиться на ветку"; continue; }
+                        cd .. || { echo "Ошибка: не удалось выйти из macro-crm-frontend"; continue; }
                     else
                         echo "Пуллим из $backend_repo $backend_branch"
-                        git fetch || { echo "Ошибка: не удалось получить изменения"; return 1; }
-                        git pull "$backend_repo" "$backend_branch" || { echo "Ошибка: не удалось обновить репозиторий"; return 1; }
-                        git checkout "$backend_branch" || { echo "Ошибка: не удалось переключиться на ветку"; return 1; }
+                        git fetch || { echo "Ошибка: не удалось получить изменения"; continue; }
+                        git pull "$backend_repo" "$backend_branch" || { echo "Ошибка: не удалось обновить репозиторий"; continue; }
+                        git checkout "$backend_branch" || { echo "Ошибка: не удалось переключиться на ветку"; continue; }
                         echo "Пуллим из $frontend_repo $frontend_branch"
-                        cd macro-crm-frontend || { echo "Ошибка: не удалось зайти в macro-crm-frontend"; return 1; }
-                        git fetch || { echo "Ошибка: не удалось получить изменения"; return 1; }
-                        git pull "$frontend_repo" "$frontend_branch" || { echo "Ошибка: не удалось обновить репозиторий"; return 1; }
-                        git checkout "$frontend_branch" || { echo "Ошибка: не удалось переключиться на ветку"; return 1; }
-                        cd .. || { echo "Ошибка: не удалось выйти из macro-crm-frontend"; return 1; }
+                        cd macro-crm-frontend || { echo "Ошибка: не удалось зайти в macro-crm-frontend"; continue; }
+                        git fetch || { echo "Ошибка: не удалось получить изменения"; continue; }
+                        git pull "$frontend_repo" "$frontend_branch" || { echo "Ошибка: не удалось обновить репозиторий"; continue; }
+                        git checkout "$frontend_branch" || { echo "Ошибка: не удалось переключиться на ветку"; continue; }
+                        cd .. || { echo "Ошибка: не удалось выйти из macro-crm-frontend"; continue; }
                     fi
                 fi
                 echo "Обновлено при помощи git"
@@ -152,7 +152,7 @@ while true; do
                 echo "Загрузить из архива - [Y] отмена обновления - [Any]"
                 read -r confirm_archive
                 if [[ "$confirm_archive" =~ ^[Yy]$ ]]; then
-                    tar -xvvf GoldenHouseRepo.tar || { echo "Ошибка: не удалось распаковать архив"; return 1; }
+                    tar -xvvf GoldenHouseRepo.tar || { echo "Ошибка: не удалось распаковать архив"; continue; }
                     echo "Обновлено при помощи архива"
                     sleep 1
                 else
