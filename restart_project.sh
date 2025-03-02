@@ -1,12 +1,17 @@
 #!/bin/bash
 docker compose down
 
+chmod -R u+w .
+
 ENV_FILE="environment.env"
 TMP_FILE=$(mktemp)
 backend_repo=$""
 backend_branch=$""
 frontend_repo=$""
 frontend_branch=$""
+APP_NAME=$(basename "$PWD")
+NETWORK_NAME="${APP_NAME}_app-network"
+
 
 echo "Проверка файла $ENV_FILE..."
 sleep 1
@@ -83,21 +88,21 @@ sleep 1
 echo "Обновить приложение из GitHub - [Y] из архива/отменить - [Any]"
 read -r confirm_git
 if [[ "$confirm_git" =~ ^[Yy]$ ]]; then
-    echo "Найден репозиторий $backend_repo и ветка $backend_branch. Загрузить оттуда?  - [Y] / [Any]"
+    echo "Найден репозиторий $backend_repo и ветка $backend_branch. Загрузить из GitHub?  - [Y] / [Any]"
     read -r confirm_git
     if [[ "$confirm_git" =~ ^[Yy]$ ]]; then
-        echo "Впервые загружаем оттуда - [Y] / [Any]"
+        echo "Впервые загружаем из GitHub - [Y] / [Any]"
         read -r confirm_git
         if [[ "$confirm_git" =~ ^[Yy]$ ]]; then
             echo "Клонируем из $backend_repo"
-            mkdir -p macro-crm-addon
-            cd macro-crm-addon || exit 1
+            mkdir -p macro-crm-temp
+            cd macro-crm-temp || exit 1
             pwd
             git clone "$backend_repo" .
             git checkout "$backend_branch"
             cd ..
-            mv macro-crm-addon/* .
-            rm -rf macro-crm-addon
+            mv macro-crm-temp/* .
+            rm -rf macro-crm-temp
             cd reporting-service
             mkdir -p export
             cd ..
@@ -126,7 +131,7 @@ else
     echo "Загрузить из архива - [Y] отмена обновления - [Any])"
     read -r confirm_archive
     if [[ "$confirm_archive" =~ ^[Yy]$ ]]; then
-        tar -xvvf  GoldenHouseRepo.tar
+        tar -xvvf GoldenHouseRepo.tar
         echo "Обновлено при помощи архива"
         sleep 1
     else
@@ -153,8 +158,8 @@ if [[ "$1" == "dev" ]]; then
 fi
 echo "Удалить сеть приложения?  - [Y] / [Any]"
 read -r confirm_net
-if [[ "$confirm_net" =~ ^[Yy]$ ]]; then
-    docker network rm {$dirname}_app-network
+if [[ "$confirm_net" =~ ^[Yy]$ ]]; then  
+    docker network rm "$NETWORK_NAME"
     echo "Cеть приложения удалена."
 fi
 # Запрос на удаление образов контейнеров
@@ -164,13 +169,13 @@ if [[ "$confirm_images" =~ ^[Yy]$ ]]; then
     echo "Удалить ВСЕ образы контейнеров (кроме бд)  - [Y] / [Any]"
     read -r confirm_images
     if [[ "$confirm_images" =~ ^[Yy]$ ]]; then
-        docker rmi mae-crm-ads-integration-service
-        docker rmi mae-crm-frontend
-        docker rmi mae-crm-reporting-service
-        docker rmi mae-crm-auth-service
+        docker rmi "${APP_NAME}-ads-integration-service"
+        docker rmi "${APP_NAME}-frontend"
+        docker rmi "${APP_NAME}-reporting-service"
+        docker rmi "${APP_NAME}-auth-service"
     elif [[ ! "$confirm_images" =~ ^[Yy]$ ]]; then
         echo "Удаление образов контейнеров (кроме бд) по очереди: "
-        images=("mae-crm-ads-integration-service" "mae-crm-frontend" "mae-crm-reporting-service" "mae-crm-auth-service")
+        images=("${APP_NAME}-ads-integration-service" "${APP_NAME}-frontend" "${APP_NAME}-reporting-service" "${APP_NAME}-auth-service")
         for img in "${images[@]}"; do
             echo "Удалить образ $img?  - [Y] / [Any]"
             read -r confirm
@@ -188,12 +193,12 @@ if [[ "$confirm_images" =~ ^[Yy]$ ]]; then
     echo "!!! Удалить ВСЕ образы контейнеров БАЗ ДАННЫХ (НЕ РЕКОМЕНДУЕТСЯ) !!!  - [Y] / [Any]"
     read -r confirm_images
     if [[ "$confirm_images" =~ ^[Yy]$ ]]; then
-        docker rmi mae-crm-db
-        docker rmi mae-crm-mongo
-        docker rmi mae-crm-rabbitmq
+        docker rmi "${APP_NAME}-db"
+        docker rmi "mongo"
+        docker rmi "rabbitmq"
     elif [[ ! "$confirm_images" =~ ^[Yy]$ ]]; then
         echo "Удаление образов контейнеров баз данных по очереди: "
-        images=("mae-crm-db" "mongo" "rabbitmq")
+        images=("${APP_NAME}-db" "mongo" "rabbitmq")
         for img in "${images[@]}"; do
             echo "Удалить образ $img?  - [Y] / [Any]"
             read -r confirm
@@ -223,7 +228,7 @@ if [[ "$confirm_volumes" =~ ^[Yy]$ ]]; then
         echo "Удалять Docker хранилища, кроме хранилищ БД?  - [Y] / [Any]"
         read -r confirm_volumes
         if [[ "$confirm_volumes" =~ ^[Yy]$ ]]; then
-            volumes=("mae-crm_ads_integration_volume" "mae-crm_export_data")
+            volumes=("${APP_NAME}_ads_integration_volume" "${APP_NAME}_export_data")
             for vol in "${volumes[@]}"; do
                 echo "Удалить хранилище $vol?  - [Y] / [Any]"
                 read -r confirm
@@ -240,7 +245,7 @@ if [[ "$confirm_volumes" =~ ^[Yy]$ ]]; then
                 echo "ВЫ УВЕРЕНЫ? ВСЕ ДАННЫЕ БУДУТ БЕЗВОЗВРАТНО УТЕРЯНЫ! !!! - [Y] / [Any]"
                 read -r confirm_volumes
                 if [[ "$confirm_volumes" =~ ^[Yy]$ ]]; then
-                    volumes=("mae-crm_postgres_data" "mae-crm_auth_data" "mae-crm_rabbitmq_data")
+                    volumes=("${APP_NAME}_postgres_data" "${APP_NAME}_auth_data" "${APP_NAME}_rabbitmq_data")
                     for vol in "${volumes[@]}"; do
                         echo "Удалить хранилище $vol?  - [Y] / [Any]"
                         read -r confirm
