@@ -1,5 +1,8 @@
 #!/bin/bash
 docker compose down
+
+chmod -R u+w .
+
 ENV_FILE="environment.env"
 TMP_FILE=$(mktemp)
 backend_repo=$""
@@ -97,6 +100,9 @@ if [[ "$confirm_git" =~ ^[Yy]$ ]]; then
             cd ..
             mv macro-crm-addon/* .
             rm -rf macro-crm-addon
+            cd reporting-service
+            mkdir -p export
+            cd ..
             echo "Клонируем из $frontend_repo"
             mkdir -p macro-crm-frontend
             cd mae-crm-frontend || exit 1
@@ -108,9 +114,6 @@ if [[ "$confirm_git" =~ ^[Yy]$ ]]; then
             git fetch
             git pull "$backend_repo" "$backend_branch"
             git checkout "$backend_branch"
-            cd reporting-service
-            mkdir -p export
-            cd ..
             echo "Пуллим из $frontend_repo $frontend_branch"
             cd macro-crm-frontend || exit 1
             git fetch
@@ -153,7 +156,7 @@ fi
 echo "Удалить сеть приложения?  - [Y] / [Any]"
 read -r confirm_net
 if [[ "$confirm_net" =~ ^[Yy]$ ]]; then
-    docker network rm mae-crm_app-network
+    docker network rm {$dirname}_app-network
     echo "Cеть приложения удалена."
 fi
 # Запрос на удаление образов контейнеров
