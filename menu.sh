@@ -131,7 +131,7 @@ while true; do
                 git pull origin "$backend_branch"
 
                 echo "Настраиваем фронтенд..."
-                cd macro-crm-frontend || exit 1
+                cd mae-crm-frontend || exit 1
 
                 # Аналогично настраиваем репозиторий для фронтенда
                 if [[ ! -d ".git" ]]; then
