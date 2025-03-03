@@ -1,13 +1,11 @@
 #!/bin/bash
-docker compose down
-chmod -R u+w .
-
 ENV_FILE="environment.env"
 TMP_FILE=$(mktemp)
 backend_repo=$""
 backend_branch=$""
 frontend_repo=$""
 frontend_branch=$""
+archieve_name=$""
 APP_NAME=$(basename "$PWD")
 NETWORK_NAME="${APP_NAME}_app-network"
 
@@ -36,7 +34,8 @@ set_git() {
     declare -g frontend_repo=$(grep "^GIT_REPO_FRONTEND_URL=" "$ENV_FILE" | cut -d '=' -f2-)
     declare -g backend_branch=$(grep "^GIT_MAIN_BACKEND_BRANCH=" "$ENV_FILE" | cut -d '=' -f2-)
     declare -g frontend_branch=$(grep "^GIT_MAIN_FRONTEND_BRANCH=" "$ENV_FILE" | cut -d '=' -f2-)
-
+    declare -g archieve_name=$(grep "^ARCHIEVE_NAME=" "$ENV_FILE" | cut -d '=' -f2-)
+    
     # Проверяем, что переменные не пустые
     if [[ -z "$backend_repo" || -z "$frontend_repo" || -z "$backend_branch" || -z "$frontend_branch" ]]; then
         echo "Ошибка: Один или несколько параметров не найдены в $ENV_FILE"
@@ -48,6 +47,7 @@ set_git() {
     echo "Backend Branch: $backend_branch"
     echo "Frontend Repo: $frontend_repo"
     echo "Frontend Branch: $frontend_branch"
+    echo "Archieve Name: $archieve_name"
 }
 
 mode="user"
@@ -188,7 +188,7 @@ while true; do
                 echo "Загрузить из архива - [Y] отмена обновления - [Any]"
                 read -r confirm_archive
                 if [[ "$confirm_archive" =~ ^[Yy]$ ]]; then
-                    tar -xvvf GoldenHouseRepo.tar
+                    tar -xvvf "$archieve_name"
                     echo "Обновлено при помощи архива"
                 else
                     echo "Обновление отменено"
