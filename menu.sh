@@ -60,6 +60,11 @@ while true; do
     echo -e "$user_menu"
     read -r command
     case $command in 
+        0 | stop)
+            echo "Остановка приложения..."
+            docker compose down
+            sleep 2
+            ;;
         1 | envcheck)
             echo "Проверка файла $ENV_FILE..."
             if [ ! -f "$ENV_FILE" ]; then
@@ -257,7 +262,7 @@ while true; do
                         sleep 1
                     fi
                 elif [[ ! "$confirm_volumes" =~ ^[Yy]$ ]]; then
-                    echo "Удалять Docker хранилища, кроме хранилищ БД?  - [Y] / [Any]"
+                    echo "Удалять Docker хранилища, данными сервиса рекламных кабинетов и с данными экспорта из системы - [Y] / [Any]"
                     read -r confirm_volumes
                     if [[ "$confirm_volumes" =~ ^[Yy]$ ]]; then
                         volumes=("${APP_NAME}_ads_integration_volume" "${APP_NAME}_export_data")
