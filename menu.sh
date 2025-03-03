@@ -21,7 +21,35 @@ user_menu="Введите команду из списка:
     7 | purge - полная очистка (dev only)
     8 | exit - выход
     clear - очистить терминал"
-    
+
+set_git() {
+    echo "Проверка файла $ENV_FILE на наличие репозитория"
+
+    # Проверяем, существует ли файл
+    if [ ! -f "$ENV_FILE" ]; then
+        echo "Ошибка: Файл $ENV_FILE не найден!"
+        return 1
+    fi
+
+    # Читаем значения из файла и записываем в глобальные переменные
+    declare -g backend_repo=$(grep "^GIT_REPO_BACKEND_URL=" "$ENV_FILE" | cut -d '=' -f2-)
+    declare -g frontend_repo=$(grep "^GIT_REPO_FRONTEND_URL=" "$ENV_FILE" | cut -d '=' -f2-)
+    declare -g backend_branch=$(grep "^GIT_MAIN_BACKEND_BRANCH=" "$ENV_FILE" | cut -d '=' -f2-)
+    declare -g frontend_branch=$(grep "^GIT_MAIN_FRONTEND_BRANCH=" "$ENV_FILE" | cut -d '=' -f2-)
+
+    # Проверяем, что переменные не пустые
+    if [[ -z "$backend_repo" || -z "$frontend_repo" || -z "$backend_branch" || -z "$frontend_branch" ]]; then
+        echo "Ошибка: Один или несколько параметров не найдены в $ENV_FILE"
+        return 1
+    fi
+
+    # Выводим значения (для проверки)
+    echo "Backend Repo: $backend_repo"
+    echo "Backend Branch: $backend_branch"
+    echo "Frontend Repo: $frontend_repo"
+    echo "Frontend Branch: $frontend_branch"
+}
+
 mode="user"
 if [[ "$1" == "dev" ]]; then
     mode="dev"
@@ -34,7 +62,6 @@ while true; do
     case $command in 
         1 | envcheck)
             echo "Проверка файла $ENV_FILE..."
-            sleep 1
             if [ ! -f "$ENV_FILE" ]; then
                 echo "Ошибка: Файл $ENV_FILE не найден!"
                 exit 1
@@ -63,22 +90,6 @@ while true; do
                     # Обрезаем пробелы
                     value="$(echo "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
                     # Если значение пустое – запрашиваем ввод
-                    if [[ "$key" = "GIT_REPO_BACKEND_URL" ]]; then
-                        backend_repo="$value"
-                        echo "Найден репозиторий: $backend_repo"
-                    fi
-                    if [[ "$key" = "GIT_MAIN_BACKEND_BRANCH" ]]; then
-                        backend_branch="$value"
-                        echo "Найдена ветка: $backend_branch"
-                    fi
-                    if [[ "$key" = "GIT_REPO_FRONTEND_URL" ]]; then
-                        frontend_repo="$value"
-                        echo "Найден репозиторий: $frontend_repo"
-                    fi
-                    if [[ "$key" = "GIT_MAIN_FRONTEND_BRANCH" ]]; then
-                        frontend_branch="$value"
-                        echo "Найдена ветка: $frontend_branch"
-                    fi
                     if [[ -z "$value" ]]; then
                         while true; do
                             read -rp "Введите значение для $key: " input
@@ -109,63 +120,78 @@ while true; do
             echo "Обновить приложение из GitHub - [Y] из архива/отменить - [Any]"
             read -r confirm_git
             if [[ "$confirm_git" =~ ^[Yy]$ ]]; then
-                echo "Настраиваем репозиторий в текущей папке..."
+                set_git
+                echo "Найден репозиторий $backend_repo и ветка $backend_branch. Загрузить из GitHub? - [Y] / [Any]"
+                read -r confirm_git
+                if [[ "$confirm_git" =~ ^[Yy]$ ]]; then
+                    echo "Настраиваем репозиторий в текущей папке..."
 
-                # Если .git нет, инициализируем репозиторий
-                if [[ ! -d ".git" ]]; then
-                    git init -b "$backend_branch"
-                    git remote add origin "$backend_repo"
+                    # Проверяем, что мы в нужной директории
+                    if [[ ! -d "." ]]; then
+                        echo "Ошибка: текущая директория недоступна"
+                        continue
+                    fi
+
+                    # Проверяем, есть ли .git, если нет — инициализируем
+                    if [[ ! -d ".git" ]]; then
+                        echo "Создаём git-репозиторий..."
+                        git init -b "$backend_branch" || { echo "Ошибка при git init"; continue; }
+                    fi
+
+                    # Проверяем, есть ли текущий origin
+                    current_origin=$(git remote get-url origin 2>/dev/null)
+                    if [[ -z "$current_origin" || "$current_origin" != "$backend_repo" ]]; then
+                        echo "Меняем origin на $backend_repo"
+                        git remote remove origin 2>/dev/null
+                        git remote add origin "$backend_repo" || { echo "Ошибка при добавлении origin"; continue; }
+                    fi
+
+                    # Загружаем изменения
+                    git fetch origin || { echo "Ошибка при git fetch"; continue; }
+                    git reset --hard "origin/$backend_branch" || { echo "Ошибка при git reset"; continue; }
+                    git pull origin "$backend_branch" || { echo "Ошибка при git pull"; continue; }
+
+                    echo "Настраиваем фронтенд..."
+
+                    # Проверяем, существует ли папка с фронтендом, иначе создаем
+                    if [[ ! -d "macro-crm-frontend" ]]; then
+                        mkdir -p macro-crm-frontend
+                    fi
+
+                    cd macro-crm-frontend || { echo "Ошибка: не удалось зайти в macro-crm-frontend"; continue; }
+
+                    # Аналогично настраиваем репозиторий для фронтенда
+                    if [[ ! -d ".git" ]]; then
+                        git init -b "$frontend_branch" || { echo "Ошибка при git init"; continue; }
+                    fi
+
+                    current_origin=$(git remote get-url origin 2>/dev/null)
+                    if [[ -z "$current_origin" || "$current_origin" != "$frontend_repo" ]]; then
+                        echo "Меняем origin на $frontend_repo"
+                        git remote remove origin 2>/dev/null
+                        git remote add origin "$frontend_repo" || { echo "Ошибка при добавлении origin"; continue; }
+                    fi
+
+                    git fetch origin || { echo "Ошибка при git fetch"; continue; }
+                    git reset --hard "origin/$frontend_branch" || { echo "Ошибка при git reset"; continue; }
+                    git pull origin "$frontend_branch" || { echo "Ошибка при git pull"; continue; }
+                    cd ..
+
+                    echo "Обновление завершено!"
                 fi
-
-                # Проверяем, привязан ли origin к нужному репозиторию
-                current_origin=$(git remote get-url origin 2>/dev/null)
-                if [[ "$current_origin" != "$backend_repo" ]]; then
-                    echo "Меняем origin на $backend_repo"
-                    git remote remove origin
-                    git remote add origin "$backend_repo"
-                fi
-
-                # Загружаем изменения
-                git fetch origin
-                git checkout "$backend_branch"
-                git pull origin "$backend_branch"
-
-                echo "Настраиваем фронтенд..."
-                cd mae-crm-frontend || exit 1
-
-                # Аналогично настраиваем репозиторий для фронтенда
-                if [[ ! -d ".git" ]]; then
-                    git init -b "$frontend_branch"
-                    git remote add origin "$frontend_repo"
-                fi
-
-                current_origin=$(git remote get-url origin 2>/dev/null)
-                if [[ "$current_origin" != "$frontend_repo" ]]; then
-                    echo "Меняем origin на $frontend_repo"
-                    git remote remove origin
-                    git remote add origin "$frontend_repo"
-                fi
-
-                git fetch origin
-                git checkout "$frontend_branch"
-                git pull origin "$frontend_branch"
-                cd ..
-                echo "Обновлено через git!"
-                
-            else 
+            else
                 echo "Загрузить из архива - [Y] отмена обновления - [Any]"
                 read -r confirm_archive
                 if [[ "$confirm_archive" =~ ^[Yy]$ ]]; then
-                    tar -xvvf GoldenHouseRepo.tar || { echo "Ошибка: не удалось распаковать архив"; continue; }
+                    tar -xvvf GoldenHouseRepo.tar
                     echo "Обновлено при помощи архива"
-                    sleep 1
                 else
                     echo "Обновление отменено"
                 fi
             fi
-            echo "Обновление завершено!"
-            sleep 2       
+            sleep 2
             ;;
+
         3 | images)
             echo "Удалять образы контейнеров (кроме бд)?  - [Y] / [Any]"
             read -r confirm_images
